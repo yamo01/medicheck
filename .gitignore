@@ -1,0 +1,10 @@
+.DS_Store
+.fuse_hidden*
+__pycache__/
+profiles.json
+Archives/
+Outputs/
+Inputs/
+DB_France/
+DB_Belgium/
+.claude/

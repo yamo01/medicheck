@@ -1,0 +1,3270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediCheck</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="src/logo-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="src/logo-icon.svg">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ══ DESIGN TOKENS — V2 ═══════════════════════════════════
+       Palette lifted directly from card-mockup_20260417.html
+    ══════════════════════════════════════════════════════════ */
+    :root {
+      /* Layout */
+      --bg:          #f3f4f6;
+      --card:        #ffffff;
+      --border:      #e5e7eb;
+      --border-lt:   #f3f4f6;
+      --shadow:      0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md:   0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg:   0 8px 24px rgba(0,0,0,0.12);
+      --rc:          14px;
+
+      /* Text */
+      --text-900:    #111827;
+      --text-700:    #374151;
+      --text-500:    #6b7280;
+      --text-400:    #9ca3af;
+      --navy:        #111827;  /* alias for ported V1 code */
+      --navy-mid:    #374151;
+
+      /* Brand */
+      --blue:        #2563eb;
+      --blue-lt:     #eff6ff;
+      --blue-mid:    #1d4ed8;
+
+      /* Semantic */
+      --red:         #dc2626;
+      --red-lt:      #fef2f2;
+      --red-dk:      #991b1b;
+      --red-border:  #fecaca;
+      --amber:       #f59e0b;
+      --amber-lt:    #fffbeb;
+      --amber-dk:    #92400e;
+      --amber-dk2:   #b45309;
+      --amber-border:#fde68a;
+      --green:       #16a34a;
+      --green-lt:    #f0fdf4;
+      --green-dk:    #166534;
+      --purple:      #6d28d9;
+      --purple-lt:   #f5f3ff;
+      --indigo:      #3730a3;
+      --indigo-lt:   #eef2ff;
+
+      /* Typography */
+      --sans:        'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --serif:       'Playfair Display', Georgia, serif;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text-900);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ══ TOP BAR ══════════════════════════════════════════════ */
+    #topbar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      height: 72px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 0 32px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .brand { display: flex; align-items: center; justify-content: center; cursor: pointer; text-decoration: none; }
+    .brand img { height: 52px; width: auto; display: block; }
+    .topbar-left { display: flex; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .lang-toggle {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; display: flex; padding: 2px; gap: 2px;
+    }
+    .lang-btn {
+      padding: 4px 10px; border-radius: 6px; border: none;
+      background: transparent; color: var(--text-500);
+      font-weight: 500; font-size: 12px; cursor: pointer;
+      font-family: var(--sans); transition: all .15s;
+    }
+    .lang-btn.active {
+      background: var(--card); color: var(--text-900);
+      font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .topbar-btn {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; cursor: pointer; transition: background .15s;
+    }
+    .topbar-btn:hover { background: var(--border); }
+
+    /* Auto-translate toggle */
+    #btn-translate {
+      display: none; /* shown only in FR mode */
+      align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      font-size: 12px; font-weight: 600; color: var(--text-500);
+      cursor: pointer; transition: all .15s; font-family: var(--sans);
+      white-space: nowrap;
+    }
+    #btn-translate:hover { background: var(--border); }
+    #btn-translate.active {
+      background: var(--blue-lt); border-color: #93c5fd;
+      color: var(--blue-mid);
+    }
+
+    /* ══ SHARED CARD ══════════════════════════════════════════ */
+    .card {
+      background: var(--card);
+      border-radius: var(--rc);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ══ SHARED BUTTONS ═══════════════════════════════════════ */
+    .btn {
+      font-family: var(--sans); font-size: 13px; font-weight: 600;
+      border: none; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; transition: all .15s; white-space: nowrap; border-radius: 8px;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary { background: var(--text-900); color: #fff; padding: 10px 20px; }
+    .btn-primary:not(:disabled):hover { background: var(--text-700); }
+    .btn-blue  { background: var(--blue); color: #fff; padding: 10px 20px; }
+    .btn-blue:not(:disabled):hover { background: var(--blue-mid); }
+    .btn-ghost {
+      background: var(--card); color: var(--text-700);
+      padding: 8px 16px; border: 1px solid var(--border);
+    }
+    .btn-ghost:not(:disabled):hover { background: var(--bg); }
+    .btn-ghost-dark {
+      background: rgba(255,255,255,0); color: var(--text-900);
+      padding: 6px 12px; border: 1px solid var(--border);
+      font-size: 12px; font-weight: 600;
+    }
+    .btn-ghost-dark:hover { background: var(--bg); }
+    .btn-outline-red {
+      background: var(--red-lt); color: var(--red);
+      padding: 8px 14px; border: 1px solid var(--red-border);
+    }
+    .btn-outline-red:not(:disabled):hover { background: #fee2e2; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* ══ BADGES ═══════════════════════════════════════════════ */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 700; letter-spacing: .05em;
+      padding: 3px 9px; border-radius: 20px; text-transform: uppercase;
+    }
+    .badge-red    { background: var(--red-lt);    color: var(--red-dk); }
+    .badge-amber  { background: var(--amber-lt);  color: var(--amber-dk); }
+    .badge-green  { background: var(--green-lt);  color: var(--green-dk); }
+    .badge-blue   { background: var(--blue-lt);   color: var(--blue-mid); }
+    .badge-gray   { background: var(--bg);        color: var(--text-500); border: 1px solid var(--border); }
+
+    /* ══ TAGS ════════════════════════════════════════════════ */
+    .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 6px; }
+    .tag-blue   { background: var(--blue-lt);  color: var(--blue-mid); }
+    .tag-red    { background: var(--red-lt);   color: var(--red-dk); }
+    .tag-amber  { background: var(--amber-lt); color: var(--amber-dk); }
+    .tag-remove { cursor: pointer; opacity: .6; font-size: 13px; background: none; border: none; padding: 0; line-height: 1; }
+    .tag-remove:hover { opacity: 1; color: var(--red); }
+
+    /* ══ TYPOGRAPHY HELPERS ══════════════════════════════════ */
+    .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-500); }
+    .divider  { border-top: 1px solid var(--border); }
+
+    /* ══════════════════════════════════════════════════════════
+       HOME VIEW
+    ══════════════════════════════════════════════════════════ */
+    #view-home    { display: block; }
+    #view-results { display: none; }
+    #view-profiles{ display: none; }
+
+    .view-wrap { max-width: 860px; margin: 0 auto; padding: 36px 24px 60px; }
+
+    /* Hero */
+    .hero { text-align: center; margin-bottom: 36px; }
+    .hero h1 {
+      font-family: var(--serif); font-size: 32px; font-weight: 800;
+      color: var(--text-900); letter-spacing: -.02em; margin-bottom: 8px;
+    }
+    .hero p { color: var(--text-500); font-size: 14px; max-width: 400px; margin: 0 auto; }
+
+    /* Profile grid */
+    #profile-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .profile-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--rc); padding: 12px 16px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      transition: box-shadow .15s, border-color .15s; min-width: 140px;
+    }
+    .profile-card:hover { box-shadow: var(--shadow-md); border-color: #d1d5db; }
+    .profile-card.active {
+      background: var(--text-900); border-color: var(--text-900);
+      box-shadow: var(--shadow-md);
+    }
+    .profile-card-add {
+      border: 2px dashed var(--border); background: transparent;
+      border-radius: var(--rc); padding: 12px 16px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px; min-width: 140px;
+      transition: border-color .15s, background .15s;
+    }
+    .profile-card-add:hover { border-color: var(--blue); background: var(--blue-lt); }
+    .profile-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--blue-lt); display: flex; align-items: center;
+      justify-content: center; font-size: 17px; flex-shrink: 0;
+    }
+    .profile-card.active .profile-avatar { background: rgba(255,255,255,.15); }
+    .profile-card-name { font-size: 13px; font-weight: 700; color: var(--text-900); }
+    .profile-card.active .profile-card-name { color: #fff; }
+    .profile-card-role { font-size: 11px; color: var(--text-500); margin-top: 1px; }
+    .profile-card.active .profile-card-role { color: rgba(255,255,255,.6); }
+    .profile-card-badges { display: flex; gap: 4px; margin-top: 4px; }
+    .pmb {
+      font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 5px;
+      background: var(--blue-lt); color: var(--blue-mid);
+    }
+    .pmb-red  { background: var(--red-lt); color: var(--red-dk); }
+    .profile-card.active .pmb,
+    .profile-card.active .pmb-red { background: rgba(255,255,255,.15); color: rgba(255,255,255,.85); }
+
+    /* Search card */
+    /* search card needs overflow:visible so the dropdown isn't clipped */
+    #search-card { padding: 24px; margin-top: 24px; margin-bottom: 16px; overflow: visible; }
+    .search-input-row { display: flex; gap: 10px; margin-top: 12px; }
+    .search-input-wrap { position: relative; flex: 1; overflow: visible; }
+    .search-input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 15px; color: var(--text-400); pointer-events: none;
+    }
+    #drug-input {
+      width: 100%; padding: 11px 36px 11px 38px;
+      border-radius: 8px; border: 1px solid var(--border);
+      font-size: 14px; font-family: var(--sans); color: var(--text-900);
+      background: var(--bg); outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #drug-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1); background: var(--card); }
+    #drug-input::placeholder { color: var(--text-400); }
+    #btn-search { padding: 11px 24px; font-size: 14px; border-radius: 8px; }
+    .search-note { font-size: 12px; color: var(--text-400); margin-top: 10px; }
+
+    /* Clear button inside search input */
+    #drug-input-clear {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: var(--text-400); border: none; border-radius: 50%;
+      width: 18px; height: 18px; cursor: pointer;
+      display: none; align-items: center; justify-content: center;
+      font-size: 11px; color: #fff; line-height: 1; padding: 0;
+      transition: background .15s;
+    }
+    #drug-input-clear.visible { display: flex; }
+    #drug-input-clear:hover { background: var(--text-700); }
+
+    /* Autocomplete */
+    #autocomplete-dropdown {
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: var(--shadow-lg); z-index: 500;
+      max-height: 320px; overflow-y: auto;
+    }
+    #autocomplete-dropdown.visible { display: block; }
+    .ac-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; cursor: pointer; font-size: 13px;
+      color: var(--text-900); transition: background .1s; gap: 10px;
+    }
+    .ac-item:not(:last-child) { border-bottom: 1px solid var(--border-lt); }
+    .ac-item:hover, .ac-item.ac-active { background: var(--blue-lt); }
+    .ac-item-name { flex: 1; font-weight: 500; }
+    .ac-item-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; white-space: nowrap; }
+    .ac-badge-be { background: #fef3c7; color: #92400e; }
+    .ac-badge-fr { background: #eff6ff; color: #1d4ed8; }
+    .ac-empty { padding: 12px 14px; font-size: 13px; color: var(--text-500); text-align: center; }
+
+    /* Recent checks */
+    #recent-card { padding: 20px; }
+    .recent-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+    .recent-row:not(:last-child) { border-bottom: 1px solid var(--border-lt); }
+    .recent-row-left { display: flex; align-items: center; gap: 10px; }
+    .recent-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .ri-green  { background: var(--green-lt); }
+    .ri-amber  { background: var(--amber-lt); }
+    .ri-red    { background: var(--red-lt); }
+    .ri-blue   { background: var(--blue-lt); }
+    .recent-drug { font-size: 13px; font-weight: 600; color: var(--text-900); }
+    .recent-meta { font-size: 11px; color: var(--text-500); margin-top: 1px; }
+    .recent-empty { text-align: center; padding: 28px 0; color: var(--text-400); font-size: 13px; }
+
+    /* ══════════════════════════════════════════════════════════
+       RESULTS VIEW
+    ══════════════════════════════════════════════════════════ */
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-500); margin-bottom: 20px; }
+    .breadcrumb-link { color: var(--blue); cursor: pointer; font-weight: 600; background: none; border: none; font-family: var(--sans); font-size: 13px; padding: 0; }
+    .breadcrumb-link:hover { text-decoration: underline; }
+
+    /* Loading */
+    #loading-overlay { display: none; text-align: center; padding: 80px 20px; }
+    #loading-overlay.visible { display: block; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-msg { font-size: 13px; color: var(--text-500); }
+
+    /* ── V2 Result Card — exact match to card-mockup_20260417 ── */
+
+    /* Alert banner (top of card, before head) */
+    .alert-banner {
+      background: var(--red-lt);
+      color: var(--red-dk);
+      border-bottom: 1px solid var(--red-border);
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .alert-banner.warn {
+      background: var(--amber-lt);
+      color: var(--amber-dk);
+      border-bottom-color: var(--amber-border);
+    }
+
+    /* Card head */
+    .card-head {
+      padding: 20px 24px 16px;
+      padding-right: 160px; /* clearance for absolute profile chip */
+      border-bottom: 1px solid var(--border-lt);
+    }
+    .profile-chip-abs {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+    }
+    .drug-title {
+      font-size: 22px; font-weight: 700;
+      color: var(--text-900); margin: 0 0 2px;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    }
+    .drug-subtitle { font-size: 13px; color: var(--text-500); }
+
+    /* Combo tag */
+    .combo-tag {
+      display: inline-block;
+      background: var(--indigo-lt); color: var(--indigo);
+      font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    }
+
+    /* Profile chip */
+    .profile-chip {
+      background: #ecfeff; border: 1px solid #a5f3fc;
+      color: #155e75; font-size: 12px;
+      padding: 4px 10px; border-radius: 12px; white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* Identity block */
+    .identity {
+      padding: 14px 24px 16px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--border-lt);
+      font-size: 13px;
+    }
+    .id-row  { display: flex; gap: 12px; margin: 3px 0; }
+    .id-label { flex: 0 0 130px; color: var(--text-500); font-weight: 500; }
+    .id-value { color: var(--text-900); flex: 1; }
+    .id-value .muted { color: var(--text-400); font-size: 12px; }
+    .inn-conflict {
+      background: #fef3c7; border: 1px dashed var(--amber);
+      padding: 2px 6px; border-radius: 4px; font-size: 12px;
+    }
+
+    /* Zone label (section divider) */
+    .zone-label {
+      padding: 14px 24px 4px;
+      font-size: 11px; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--text-500); font-weight: 700;
+    }
+
+    /* Flat section row */
+    .section {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border-lt);
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .section-icon { flex: 0 0 28px; font-size: 18px; padding-top: 1px; }
+    .section-body { flex: 1; min-width: 0; }
+    .section-head {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 4px; gap: 8px;
+    }
+    .section-title { font-weight: 600; font-size: 14px; color: var(--text-900); }
+    .section.danger  .section-title { color: var(--red-dk); }
+    .section.warning .section-title { color: var(--amber-dk2); }
+    .section-content { font-size: 13px; color: var(--text-700); line-height: 1.6; }
+    .section-empty   { color: var(--text-400); font-style: italic; font-size: 13px; }
+
+    /* Provenance badge — exact from mockup */
+    .prov {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--bg); color: #4b5563;
+      font-size: 10px; font-weight: 600; padding: 2px 7px;
+      border-radius: 10px; white-space: nowrap;
+      text-transform: uppercase; letter-spacing: .4px; flex-shrink: 0;
+    }
+    .prov.fr     { background: var(--blue-lt);   color: var(--blue-mid); }
+    .prov.be     { background: var(--amber-lt);  color: var(--amber-dk); }
+    .prov.us     { background: var(--green-lt);  color: var(--green-dk); }
+    .prov.curated{ background: var(--purple-lt); color: var(--purple); }
+    body.hide-prov .prov { display: none; }
+
+    /* Per-ingredient warning row */
+    .ing-warn {
+      background: var(--red-lt); border-left: 3px solid var(--red);
+      padding: 8px 12px; margin: 6px 0; border-radius: 4px; font-size: 13px;
+    }
+    .ing-warn .sev {
+      display: inline-block; background: var(--red); color: #fff;
+      font-size: 10px; padding: 1px 6px; border-radius: 3px;
+      margin-right: 6px; font-weight: 700; text-transform: uppercase;
+    }
+    .ing-warn.moderate { border-left-color: var(--amber); background: var(--amber-lt); }
+    .ing-warn.moderate .sev { background: var(--amber); }
+
+    /* Jurisdiction accordion — exact from mockup */
+    .juri {
+      margin: 8px 24px; border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+    .juri-head {
+      background: #f9fafb; padding: 10px 16px;
+      font-weight: 600; font-size: 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; user-select: none; transition: background .15s;
+    }
+    .juri-head:hover { background: var(--bg); }
+    .juri-head::after {
+      content: "▾"; color: var(--text-400); font-size: 11px;
+      margin-left: 10px; transition: transform .2s ease; display: inline-block;
+    }
+    .juri:not(.open) .juri-head   { border-bottom: none; }
+    .juri:not(.open) .juri-head::after { transform: rotate(-90deg); }
+    .juri:not(.open) .juri-body   { display: none; }
+    .juri-body { padding: 12px 16px; font-size: 13px; }
+    .juri-body .id-row { margin: 5px 0; }
+    .juri-body .id-label { flex-basis: 180px; font-size: 12px; }
+    .juri-specific {
+      margin-top: 10px; padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      font-size: 10px; color: var(--text-400);
+      text-transform: uppercase; letter-spacing: .6px;
+      font-weight: 700; margin-bottom: 4px;
+    }
+    .juri.unavailable .juri-body { color: var(--text-500); font-style: italic; background: #fafafa; }
+    /* last juri has bottom margin */
+    .juri:last-of-type { margin-bottom: 16px; }
+
+    /* ── Option C: Equivalents tab ──────────────────────────────── */
+    .equiv-wrap   { padding: 16px 20px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .seg-control  { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
+    .seg-btn      { padding: 6px 16px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-500); background: transparent; font-family: var(--sans); display: flex; align-items: center; gap: 6px; transition: all .15s; }
+    .seg-btn.active { background: var(--card); color: var(--text-900); box-shadow: var(--shadow); }
+    .seg-count    { font-size: 10px; padding: 1px 5px; border-radius: 8px; font-weight: 700; }
+    .seg-btn.active     .seg-count { background: var(--blue-lt); color: var(--blue-mid); }
+    .seg-btn:not(.active) .seg-count { background: var(--border); color: var(--text-500); }
+    .equiv-note   { font-size: 11px; color: var(--text-400); }
+    .equiv-panel  { }
+    .brand-group  { padding: 12px 20px 0; }
+    .brand-group-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-400); padding: 8px 0 6px; border-bottom: 1px solid var(--border-lt); margin-bottom: 6px; }
+    .brand-section { margin-bottom: 14px; }
+    .variant-row  { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border-lt); }
+    .variant-row:last-child { border-bottom: none; }
+    .variant-left { display: flex; align-items: center; gap: 10px; }
+    .variant-dot  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--border); }
+    .variant-name { font-size: 13px; font-weight: 600; color: var(--text-900); }
+    .variant-form { font-size: 11px; color: var(--text-500); }
+    .variant-right{ display: flex; align-items: center; gap: 8px; }
+    .equiv-footer { padding: 8px 20px 14px; border-top: 1px solid var(--border-lt); margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .equiv-total  { font-size: 12px; color: var(--text-500); }
+    .equiv-total strong { color: var(--text-900); }
+    .equiv-empty  { padding: 16px 20px; font-size: 13px; color: var(--text-400); font-style: italic; }
+    .equiv-unavail{ padding: 16px 20px; font-size: 13px; color: var(--text-500); font-style: italic; }
+
+    /* ── Card tab bar ────────────────────────────────────────── */
+    .tab-bar {
+      display: flex; padding: 0 28px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-top: 20px;
+    }
+    .tab-btn {
+      padding: 12px 20px; font-size: 13px; font-weight: 600;
+      color: var(--text-500); background: none; border: none;
+      border-bottom: 2px solid transparent; cursor: pointer;
+      margin-bottom: -1px; font-family: var(--sans);
+      white-space: nowrap; display: flex; align-items: center;
+      gap: 7px; transition: color .15s;
+    }
+    .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab-btn:hover:not(.active) { color: var(--text-700); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Lab accordions (Noms commerciaux tab) ───────────────── */
+    .lab-accordion { border-bottom: 1px solid var(--border-lt); }
+    .lab-accordion:last-of-type { border-bottom: none; }
+    .lab-accordion summary {
+      list-style: none; display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; cursor: pointer; user-select: none;
+      background: #fafafa;
+    }
+    .lab-accordion summary::-webkit-details-marker { display: none; }
+    .lab-accordion[open] summary { border-bottom: 1px solid var(--border-lt); }
+    .lab-accordion summary .seg-count { background: var(--border); color: var(--text-500); }
+    .lab-accordion[open] summary .seg-count { background: var(--blue-lt); color: var(--blue-mid); }
+    .lab-name { font-size: 14px; font-weight: 700; color: var(--text-900); }
+    .lab-chevron { margin-left: auto; font-size: 11px; color: var(--text-400); transition: transform .2s; flex-shrink: 0; }
+    .lab-accordion[open] .lab-chevron { transform: rotate(90deg); }
+    .prod-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px; border-bottom: 1px solid var(--border-lt); }
+    .prod-row:last-child { border-bottom: none; }
+    .prod-left { }
+    .prod-name { font-size: 14px; font-weight: 700; color: var(--text-900); }
+    .prod-form { font-size: 13px; color: var(--text-500); margin-top: 1px; }
+    .prod-right { display: flex; align-items: baseline; gap: 14px; flex-shrink: 0; }
+    .prod-price { font-size: 14px; font-weight: 700; color: var(--text-700); }
+    .prod-price.na { color: var(--text-400); font-weight: 400; font-style: italic; }
+    .prod-remb { font-size: 14px; font-weight: 600; }
+    .prod-remb.yes { color: var(--green); }
+    .prod-remb.no  { color: var(--text-400); }
+    .comm-wrap { padding: 16px 20px 0; }
+    .comm-note { font-size: 11px; color: var(--text-400); }
+    .comm-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+    .comm-footer { padding: 12px 20px 14px; border-top: 1px solid var(--border-lt); display: flex; justify-content: space-between; align-items: center; }
+    .comm-total { font-size: 12px; color: var(--text-500); }
+    .comm-total strong { color: var(--text-900); }
+    .juri-tab-panels { padding: 20px 28px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Card footer */
+    .card-foot {
+      padding: 12px 24px; background: #fafafa;
+      border-top: 1px solid var(--border-lt);
+      font-size: 12px; color: var(--text-500);
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .pdf-btn {
+      background: var(--text-900); color: #fff;
+      border: none; padding: 6px 12px; border-radius: 6px;
+      cursor: pointer; font-size: 12px; font-weight: 600;
+      font-family: var(--sans);
+    }
+    .pdf-btn:hover { background: var(--text-700); }
+
+    /* Disclaimer */
+    .card-disclaimer {
+      padding: 10px 24px; background: #f9fafb;
+      font-size: 11px; color: var(--text-500);
+      border-top: 1px solid var(--border-lt); line-height: 1.4;
+    }
+
+    /* Provenance toggle control */
+    .prov-control {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px;
+      font-size: 12px; color: var(--text-700);
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 12px; cursor: pointer; user-select: none;
+    }
+    .prov-control input { cursor: pointer; }
+
+    /* ══════════════════════════════════════════════════════════
+       PROFILES VIEW
+    ══════════════════════════════════════════════════════════ */
+    #profiles-grid { display: grid; grid-template-columns: 240px 1fr; gap: 16px; }
+    .sidebar-label { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-500); margin-bottom: 10px; }
+    #profiles-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+    .sidebar-profile-item {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px; transition: all .15s;
+    }
+    .sidebar-profile-item:hover { box-shadow: var(--shadow-md); }
+    .sidebar-profile-item.active { background: var(--text-900); border-color: var(--text-900); }
+    .sidebar-profile-item .sp-name { font-size: 13px; font-weight: 700; color: var(--text-900); }
+    .sidebar-profile-item.active .sp-name { color: #fff; }
+    .sidebar-profile-item .sp-role { font-size: 11px; color: var(--text-500); }
+    .sidebar-profile-item.active .sp-role { color: rgba(255,255,255,.6); }
+
+    #json-card { padding: 14px; }
+    #json-card-title { margin-bottom: 10px; }
+    .json-btn-col { display: flex; flex-direction: column; gap: 6px; }
+    .json-btn {
+      padding: 9px 12px; border-radius: 8px;
+      font-family: var(--sans); font-size: 13px; font-weight: 600;
+      cursor: pointer; text-align: left; border: none; transition: all .15s;
+    }
+    .json-btn-load { background: var(--bg); border: 1px solid var(--border); color: var(--text-700); }
+    .json-btn-load:hover { background: var(--border); }
+    .json-btn-save { background: var(--text-900); color: #fff; }
+    .json-btn-save:hover { background: var(--text-700); }
+    .json-note { font-size: 11px; color: var(--text-500); margin-top: 8px; line-height: 1.5; }
+
+    /* Profile detail panel */
+    #profile-detail-card { padding: 24px; }
+    .pd-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .pd-avatar-row { display: flex; align-items: center; gap: 12px; }
+    .pd-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--blue-lt); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+    .pd-name { font-size: 18px; font-weight: 700; color: var(--text-900); }
+    .pd-role { font-size: 13px; color: var(--text-500); margin-top: 2px; }
+    .field-row { display: grid; grid-template-columns: 120px 1fr; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--border-lt); align-items: flex-start; }
+    .field-row:last-of-type { border-bottom: none; }
+    .field-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-500); padding-top: 2px; }
+    .field-value { font-size: 13px; color: var(--text-700); font-weight: 500; line-height: 1.5; }
+    .field-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    #pd-meds-warning { margin-top: 16px; padding: 10px 14px; background: var(--amber-lt); border-radius: 8px; border: 1px solid var(--amber-border); display: flex; gap: 8px; align-items: flex-start; }
+    #pd-meds-warning p { font-size: 12px; color: var(--amber-dk); margin: 0; line-height: 1.6; }
+    #profile-empty-state { padding: 56px 20px; text-align: center; color: var(--text-400); }
+    #unsaved-dot { display: none; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; background: var(--amber); border-radius: 50%; }
+
+    /* ══════════════════════════════════════════════════════════
+       MODAL
+    ══════════════════════════════════════════════════════════ */
+    #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 300; align-items: center; justify-content: center; }
+    #modal-overlay.visible { display: flex; }
+    #modal { background: var(--card); border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; margin: 16px; box-shadow: var(--shadow-lg); }
+    #modal-header { padding: 18px 22px 14px; border-bottom: 1px solid var(--border-lt); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--card); z-index: 1; border-radius: 16px 16px 0 0; }
+    #modal-title { font-size: 16px; font-weight: 700; color: var(--text-900); }
+    #modal-close { background: var(--bg); border: 1px solid var(--border); border-radius: 50%; width: 28px; height: 28px; font-size: 13px; cursor: pointer; color: var(--text-500); display: flex; align-items: center; justify-content: center; transition: background .15s; }
+    #modal-close:hover { background: var(--border); }
+    #modal-body { padding: 18px 22px; }
+    #modal-footer { padding: 14px 22px; border-top: 1px solid var(--border-lt); display: flex; gap: 8px; justify-content: flex-end; position: sticky; bottom: 0; background: var(--card); border-radius: 0 0 16px 16px; }
+
+    /* Modal form */
+    .form-group { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 11px; font-weight: 700; color: var(--text-700); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .05em; }
+    .form-input, .form-select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--sans); color: var(--text-900); background: var(--card); outline: none; transition: border-color .2s, box-shadow .2s; }
+    .form-input:focus, .form-select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+    .form-input::placeholder { color: var(--text-400); }
+    .form-row { display: flex; gap: 10px; }
+    .form-row .form-group { flex: 1; }
+    .conditional-field { display: none; }
+    .conditional-field.visible { display: block; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; min-height: 22px; }
+    .tag-input-row { display: flex; gap: 6px; margin-top: 5px; }
+    .tag-input-row .form-input { flex: 1; }
+
+    /* ══ TOAST ═══════════════════════════════════════════════ */
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* ══ DB NOTICE ═══════════════════════════════════════════ */
+    #db-notice {
+      display: none;
+      background: var(--amber-lt); border-bottom: 1px solid var(--amber-border);
+      padding: 8px 32px; font-size: 12px; color: var(--amber-dk); text-align: center;
+    }
+    #db-notice.visible { display: block; }
+
+    /* ══ RESPONSIVE ══════════════════════════════════════════ */
+    @media (max-width: 680px) {
+      .view-wrap { padding: 20px 14px 48px; }
+      #topbar { padding: 0 14px; height: 60px; }
+      .brand img { height: 40px; }
+      .hero h1 { font-size: 26px; }
+      #profiles-grid { grid-template-columns: 1fr; }
+      #profiles-sidebar { display: contents; }
+      .id-label { flex-basis: 110px; }
+      .juri-body .id-label { flex-basis: 120px; }
+      .juri { margin-left: 12px; margin-right: 12px; }
+      .card-head { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══ DB NOTICE ════════════════════════════════════════════ -->
+  <div id="db-notice">
+    ⚠️ Bases médicaments non chargées — BDPM et SAM indisponibles. Vérifiez votre connexion et rechargez la page.
+  </div>
+
+  <!-- ══ TOP BAR ══════════════════════════════════════════════ -->
+  <header id="topbar">
+    <div class="topbar-left"></div>
+    <div class="brand" onclick="switchView('home')">
+      <img src="src/logo-name.svg" alt="MediCheck">
+    </div>
+    <div class="topbar-right">
+      <button id="btn-translate" onclick="toggleAutoTranslate()" title="Traduire les données FDA en français">
+        🌐 <span id="btn-translate-label">Traduire FDA</span>
+      </button>
+      <div class="lang-toggle">
+        <button class="lang-btn active" id="btn-fr" onclick="setLang('fr')">🇫🇷 FR</button>
+        <button class="lang-btn"        id="btn-en" onclick="setLang('en')">🇬🇧 EN</button>
+      </div>
+      <button class="topbar-btn" onclick="switchView('profiles')" title="Gérer les profils">👤</button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════
+       HOME VIEW
+  ══════════════════════════════════════════════════════════ -->
+  <div id="view-home">
+    <div class="view-wrap">
+
+      <div class="hero">
+        <h1 data-i18n="heroTitle">Vérifiez avant de prendre</h1>
+        <p data-i18n="heroSubtitle">Vérification sécurisée des médicaments pour toute la famille</p>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <p class="eyebrow" style="margin-bottom:10px;" data-i18n="selectProfile">Choisir un profil</p>
+        <div id="profile-grid"></div>
+      </div>
+
+      <div class="card" id="search-card">
+        <p class="eyebrow" data-i18n="drugLabel">Nom du médicament</p>
+        <div class="search-input-row">
+          <div class="search-input-wrap">
+            <span class="search-input-icon">🔍</span>
+            <input type="text" id="drug-input" autocomplete="off" spellcheck="false"
+              data-i18n-placeholder="searchPlaceholder"
+              placeholder="Ex: ibuprofène, Doliprane, amoxicilline…"
+              oninput="onDrugInput(event)"
+              onkeydown="onDrugKeydown(event)" />
+            <button id="drug-input-clear" type="button" onclick="clearDrugInput()" title="Effacer">✕</button>
+            <div id="autocomplete-dropdown"></div>
+          </div>
+          <button class="btn btn-primary" id="btn-search" onclick="searchDrug()">
+            <span data-i18n="searchBtn">Vérifier →</span>
+          </button>
+        </div>
+        <p class="search-note">🔒 <span data-i18n="searchNote">Données locales — aucune information personnelle transmise.</span></p>
+      </div>
+
+      <div class="card" id="recent-card" style="margin-top:14px;">
+        <div style="padding:16px 20px 0;">
+          <p class="eyebrow" data-i18n="recentTitle">Vérifications récentes</p>
+        </div>
+        <div id="recent-list" style="padding:0 4px 8px;"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       RESULTS VIEW
+  ══════════════════════════════════════════════════════════ -->
+  <div id="view-results">
+    <div class="view-wrap">
+
+      <div class="breadcrumb">
+        <button class="breadcrumb-link" onclick="switchView('home')" data-i18n="backHome">← Accueil</button>
+        <span>›</span>
+        <span id="breadcrumb-drug">—</span>
+      </div>
+
+      <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p id="loading-msg" data-i18n="loading">Recherche en cours…</p>
+      </div>
+
+      <!-- Provenance toggle (only shown when results are visible) -->
+      <label class="prov-control" id="prov-control" style="display:none;">
+        <input type="checkbox" id="tog-prov" checked onchange="toggleProv(this.checked)">
+        <span data-i18n="showProv">Afficher les badges de provenance</span>
+      </label>
+
+      <!-- All result content injected here by renderResultsV2() -->
+      <div id="results-content" style="display:none;"></div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       PROFILES VIEW
+  ══════════════════════════════════════════════════════════ -->
+  <div id="view-profiles">
+    <div class="view-wrap">
+      <div id="profiles-grid">
+
+        <div id="profiles-sidebar">
+          <p class="sidebar-label" data-i18n="profilesViewTitle">Profils de famille</p>
+          <div id="profiles-list"></div>
+          <button class="btn btn-ghost" style="width:100%;margin-bottom:14px;border-style:dashed;" onclick="openAddProfile()">
+            ＋ <span data-i18n="addProfile">Ajouter un profil</span>
+          </button>
+          <div class="card" id="json-card">
+            <p class="eyebrow" id="json-card-title" data-i18n="jsonFile">Fichier JSON</p>
+            <div class="json-btn-col">
+              <button class="json-btn json-btn-load" onclick="triggerLoadProfiles()">
+                📂 <span data-i18n="loadFile">Charger profiles.json</span>
+              </button>
+              <button class="json-btn json-btn-save" style="position:relative;" onclick="openSaveDialog()">
+                💾 <span data-i18n="saveFile">Sauvegarder</span>
+                <span id="unsaved-dot"></span>
+              </button>
+            </div>
+            <p class="json-note" data-i18n="privacyNote">🔒 Données locales uniquement. Jamais transmises.</p>
+          </div>
+        </div>
+
+        <div id="profile-detail-card" class="card">
+          <div id="profile-empty-state">
+            <p style="font-size:30px;margin-bottom:10px;">👤</p>
+            <p data-i18n="selectProfileHint">Sélectionnez un profil pour voir les détails.</p>
+          </div>
+          <div id="profile-detail" style="display:none;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MODAL ════════════════════════════════════════════════ -->
+  <div id="modal-overlay" onclick="handleOverlayClick(event)">
+    <div id="modal">
+      <div id="modal-header">
+        <span id="modal-title"></span>
+        <button id="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div id="modal-body"></div>
+      <div id="modal-footer"></div>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileLoad(event)" />
+
+  <!-- ══ JAVASCRIPT ════════════════════════════════════════════ -->
+  <script src="src/sql-wasm.js"></script>
+  <script>
+  /* ═══════════════════════════════════════════════════════════════
+     PART 2 — i18n · App State · Profile Management · Autocomplete
+  ═══════════════════════════════════════════════════════════════ */
+
+  /* ── i18n ──────────────────────────────────────────────────── */
+  const S = {
+    fr: {
+      heroTitle:         'Vérifiez avant de prendre',
+      heroSubtitle:      'Vérification sécurisée des médicaments pour toute la famille',
+      selectProfile:     'Choisir un profil',
+      newProfile:        'Nouveau profil',
+      drugLabel:         'Nom du médicament',
+      searchPlaceholder: 'Ex: ibuprofène, Doliprane, amoxicilline…',
+      searchBtn:         'Vérifier →',
+      searchNote:        'Données locales — aucune information personnelle transmise.',
+      recentTitle:       'Vérifications récentes',
+      noRecent:          'Aucune vérification pour cette session.',
+      manageProfiles:    'Gérer les profils',
+      backHome:          '← Accueil',
+      profilesViewTitle: 'Profils de famille',
+      addProfile:        'Ajouter un profil',
+      loadFile:          'Charger profiles.json',
+      saveFile:          'Sauvegarder',
+      jsonFile:          'Fichier JSON',
+      privacyNote:       '🔒 Données locales uniquement. Jamais transmises.',
+      selectProfileHint: 'Sélectionnez un profil pour voir les détails.',
+      loading:           'Recherche en cours…',
+      loadingStep:       s => `Recherche en cours… ${s}`,
+      showProv:          'Afficher les badges de provenance',
+      pdfBtn:            '⬇️ PDF',
+      disclaimerText:    '<strong>Avertissement médical :</strong> Cet outil est fourni à titre informatif uniquement et ne remplace pas un avis médical professionnel. Consultez toujours un médecin ou pharmacien avant de prendre ou modifier un traitement.',
+      // Profile modal
+      addProfileTitle:   'Ajouter un profil',
+      editProfileTitle:  'Modifier le profil',
+      fieldName:         'Prénom / Nom',
+      fieldSex:          'Sexe',
+      sexMale: 'Masculin', sexFemale: 'Féminin', sexOther: 'Autre',
+      fieldCategory:     'Catégorie',
+      catChild: 'Enfant (< 18 ans)', catAdult: 'Adulte (18–64 ans)', catElderly: 'Senior (65+)',
+      fieldAge: 'Âge (années)', fieldWeight: 'Poids (kg)',
+      fieldPregnancy:    'Grossesse en cours',
+      fieldAllergies: 'Allergies', fieldIntolerances: 'Intolérances',
+      fieldConditions: 'Maladies chroniques', fieldMedications: 'Médicaments actuels',
+      tagHintAllergies:  'Ex : pénicilline, aspirine…',
+      tagHintMedications:'Ex : metformine, ramipril…',
+      tagHintConditions: 'Ex : diabète, hypertension…',
+      btnSave: 'Enregistrer', btnCancel: 'Annuler', btnDelete: 'Supprimer',
+      confirmDelete:     'Supprimer ce profil ?',
+      confirmReplace:    'Vous avez déjà des profils. Remplacer par le fichier chargé ?',
+      confirmUnsaved:    'Des modifications non enregistrées seront perdues. Continuer ?',
+      adult: 'Adulte', child: 'Enfant', elderly: 'Senior',
+      // Save dialog
+      saveDialogTitle:   'Enregistrer les profils',
+      saveDialogLabel:   'Nom du fichier',
+      saveDialogInfo:    n => `${n} profil${n > 1 ? 's' : ''} à enregistrer`,
+      saveDialogBtn:     'Enregistrer',
+      // Errors
+      errNoDrug:         'Veuillez entrer un nom de médicament.',
+      errNoProfile:      'Veuillez sélectionner un profil.',
+      allergyNoProfile:  'Chargez un profil pour vérifier les allergies et réactions croisées personnalisées.',
+      ddiNoProfile:      'Chargez un profil pour vérifier les interactions avec vos médicaments en cours.',
+      zoneSafetyGeneric: 'Sécurité — informations générales',
+      errNotFound:       'Médicament non reconnu — vérifiez l\'orthographe ou essayez la DCI.',
+      errSearch:         'Erreur de connexion. Vérifiez votre réseau.',
+      errTitle:          'Erreur',
+      // Result — tab labels
+      tabMolecule:       '💊 Molécule',
+      tabJuridiction:    '🏛️ Juridiction',
+      tabCommercial:     '🏷️ Noms commerciaux',
+      // Result — zone labels
+      zoneMolecule:      'Zone molécule — informations cliniques',
+      zoneSafety:        'Sécurité — vérifié contre votre profil',
+      zoneSpecialPops:   'Populations spéciales',
+      zoneJuridiction:   'Zone juridiction — informations nationales',
+      zoneEquivalents:   'Noms commerciaux — équivalents purs',
+      pureEquivsNote:    'Uniquement équivalents purs — sans combinaisons',
+      noEquivalents:     'Aucun équivalent pur trouvé pour cette molécule.',
+      equivLoadErr:      'Bases médicaments non disponibles — rechargez la page pour voir les équivalents.',
+      equivGroupGenerics:'Génériques',
+      // Result — section titles
+      secIndication:       'Indications',
+      secDosage:           'Posologie',
+      secSideEffects:      'Effets secondaires',
+      secContraindications:'Contre-indications',
+      secAllergies:        'Allergies et réactions croisées',
+      secDDI:              'Interactions médicamenteuses',
+      secFood:             'Interactions alimentaires',
+      secPregnancy:        'Grossesse',
+      secPediatric:        'Pédiatrie',
+      secElderly:          'Gériatrie',
+      // Result — identity labels
+      labelSearched:     'Recherché',
+      labelDCI:          'DCI / Molécule',
+      labelATC:          'Classe ATC',
+      labelBrands:       'Noms commerciaux',
+      // Result — jurisdiction row labels
+      juriPrincipe:      'Principe actif(s)',
+      juriForme:         'Forme pharmaceutique',
+      juriVoie:          'Voie d\'administration',
+      juriFormes:        'Formes commercialisées',
+      juriStatut:        'Statut de délivrance',
+      juriPrix:          'Prix',
+      juriRemb:          'Remboursement',
+      juriGen:           'Génériques',
+      juriAlertes:       'Alertes actives',
+      juriSMR:           'SMR',
+      juriASMR:          'ASMR',
+      juriCategRemb:     'Catégorie de remb.',
+      juriUnavailable:   pays => `Non disponible en ${pays} — médicament non autorisé sur le marché ${pays === 'Belgique' ? 'belge' : 'français'}.`,
+      juriNoProxy:       'Bases médicaments non chargées — données non disponibles. Rechargez la page.',
+      specifiqueFR:      'Spécifique 🇫🇷',
+      specifiqueBE:      'Spécifique 🇧🇪',
+      // Safety
+      allergyConflict:   c => `Allergie au <strong>${esc(c)}</strong> identifiée. Ne pas administrer sans avis médical.`,
+      allergyOK:         al => al.length ? `Aucun conflit avec les allergies du profil (${esc(al.join(', '))}).` : 'Aucune allergie enregistrée dans ce profil.',
+      ddiText:           n => `${n} interaction${n > 1 ? 's' : ''} potentielle${n > 1 ? 's' : ''} détectée${n > 1 ? 's' : ''}.`,
+      ddiOK:             m => `Aucune interaction détectée avec : ${esc(m.join(', '))}.`,
+      ddiNone:           'Aucun médicament renseigné dans ce profil — ajoutez vos traitements en cours pour activer la vérification.',
+      ddiDisclaimer:     'Consultez votre pharmacien pour une évaluation complète des interactions.',
+      foodNone:          'Aucune interaction alimentaire significative connue pour cette molécule.',
+      noDataFDA:         'Donnée indisponible — aucune fiche FDA trouvée pour cette molécule.',
+      noDataProxy:       'Donnée indisponible — proxy local non actif.',
+      elderlyDefault:    'Dose minimale efficace recommandée. Surveillance rénale et hépatique conseillée. Risque accru de chutes avec les sédatifs.',
+      pediatricDefault:  (a, w) => `Profil : ${a} ans / ${w} kg. Posologie pédiatrique à confirmer avec un professionnel de santé — les doses adultes ne s\'appliquent pas.`,
+      pregnancyDefault:  'Consulter impérativement un médecin ou pharmacien avant toute prise pendant la grossesse ou l\'allaitement.',
+      comboBreakdown:    'Détail par substance active',
+      translateOn:       '🌐 Traduire FDA',
+      translateOff:      '🌐 Traduction active',
+      translateNote:     'traduit de l\'anglais',
+      loadingTranslating:'Traduction des données FDA…',
+      // Alert banner
+      alertTitle:        prof => `⚠ Allergie détectée — profil ${prof}`,
+      alertBody:         drug => `Ce médicament contient un principe actif listé comme allergie. Ne pas administrer sans avis médical.`,
+      // Footer
+      sourcesLabel:      'Sources :',
+      recentAgo:         n => n === 0 ? "à l'instant" : `il y a ${n} min`,
+    },
+    en: {
+      heroTitle:         'Check before you take',
+      heroSubtitle:      'Secure medication safety check for the whole family',
+      selectProfile:     'Select a profile',
+      newProfile:        'New profile',
+      drugLabel:         'Medication name',
+      searchPlaceholder: 'E.g. ibuprofen, Paracetamol, amoxicillin…',
+      searchBtn:         'Check →',
+      searchNote:        'Local data — no personal information is transmitted.',
+      recentTitle:       'Recent checks',
+      noRecent:          'No checks this session.',
+      manageProfiles:    'Manage profiles',
+      backHome:          '← Home',
+      profilesViewTitle: 'Family profiles',
+      addProfile:        'Add a profile',
+      loadFile:          'Load profiles.json',
+      saveFile:          'Save',
+      jsonFile:          'JSON file',
+      privacyNote:       '🔒 Local data only. Never transmitted.',
+      selectProfileHint: 'Select a profile to view details.',
+      loading:           'Searching…',
+      loadingStep:       s => `Searching… ${s}`,
+      showProv:          'Show provenance badges',
+      pdfBtn:            '⬇️ PDF',
+      disclaimerText:    '<strong>Medical disclaimer:</strong> This tool is provided for informational purposes only and does not replace professional medical advice. Always consult a doctor or pharmacist before starting or changing any treatment.',
+      addProfileTitle:   'Add a profile',
+      editProfileTitle:  'Edit profile',
+      fieldName: 'First / Last name', fieldSex: 'Sex',
+      sexMale: 'Male', sexFemale: 'Female', sexOther: 'Other',
+      fieldCategory: 'Category',
+      catChild: 'Child (< 18)', catAdult: 'Adult (18–64)', catElderly: 'Elderly (65+)',
+      fieldAge: 'Age (years)', fieldWeight: 'Weight (kg)',
+      fieldPregnancy: 'Currently pregnant',
+      fieldAllergies: 'Allergies', fieldIntolerances: 'Intolerances',
+      fieldConditions: 'Chronic conditions', fieldMedications: 'Current medications',
+      tagHintAllergies: 'e.g. penicillin, aspirin…',
+      tagHintMedications: 'e.g. metformin, ramipril…',
+      tagHintConditions: 'e.g. diabetes, hypertension…',
+      btnSave: 'Save', btnCancel: 'Cancel', btnDelete: 'Delete',
+      confirmDelete: 'Delete this profile?',
+      confirmReplace: 'You already have profiles. Replace with loaded file?',
+      confirmUnsaved: 'Unsaved changes will be lost. Continue?',
+      adult: 'Adult', child: 'Child', elderly: 'Elderly',
+      saveDialogTitle: 'Save profiles',
+      saveDialogLabel: 'File name',
+      saveDialogInfo:  n => `${n} profile${n > 1 ? 's' : ''} to save`,
+      saveDialogBtn: 'Save',
+      errNoDrug: 'Please enter a medication name.',
+      errNoProfile: 'Please select a profile.',
+      allergyNoProfile:  'Load a profile to check for allergies and cross-reactivity.',
+      ddiNoProfile:      'Load a profile to check interactions with your current medications.',
+      zoneSafetyGeneric: 'Safety — general information',
+      errNotFound: 'Medication not found. Try the generic name (INN) or an alternative spelling.',
+      errSearch: 'Connection error. Please check your network.',
+      errTitle: 'Error',
+      tabMolecule:       '💊 Molecule',
+      tabJuridiction:    '🏛️ Jurisdiction',
+      tabCommercial:     '🏷️ Brand names',
+      zoneMolecule:      'Molecule zone — clinical information',
+      zoneSafety:        'Safety — checked against your profile',
+      zoneSpecialPops:   'Special populations',
+      zoneJuridiction:   'Jurisdiction zone — national information',
+      zoneEquivalents:   'Commercial names — pure equivalents',
+      pureEquivsNote:    'Pure equivalents only — no combination drugs',
+      noEquivalents:     'No pure equivalents found for this molecule.',
+      equivLoadErr:      'Drug databases unavailable — reload the page to see equivalents.',
+      equivGroupGenerics:'Generics',
+      secIndication:       'Indications',
+      secDosage:           'Dosage & Administration',
+      secSideEffects:      'Adverse Reactions',
+      secContraindications:'Contraindications',
+      secAllergies:        'Allergies & Cross-Reactivity',
+      secDDI:              'Drug Interactions',
+      secFood:             'Food Interactions',
+      secPregnancy:        'Pregnancy',
+      secPediatric:        'Pediatrics',
+      secElderly:          'Geriatrics',
+      labelSearched:     'Searched',
+      labelDCI:          'Generic name',
+      labelATC:          'ATC class',
+      labelBrands:       'Brand names',
+      juriPrincipe:      'Active ingredient(s)',
+      juriForme:         'Dosage form',
+      juriVoie:          'Route of admin.',
+      juriFormes:        'Marketed forms',
+      juriStatut:        'Dispensing status',
+      juriPrix:          'Price',
+      juriRemb:          'Reimbursement',
+      juriGen:           'Generics',
+      juriAlertes:       'Active alerts',
+      juriSMR:           'SMR',
+      juriASMR:          'ASMR',
+      juriCategRemb:     'Reimb. category',
+      juriUnavailable:   country => `Not available in ${country} — not authorised on the ${country} market.`,
+      juriNoProxy:       'Drug databases not loaded — data unavailable. Reload the page.',
+      specifiqueFR:      'Specific 🇫🇷',
+      specifiqueBE:      'Specific 🇧🇪',
+      allergyConflict:   c => `Allergy to <strong>${esc(c)}</strong> found. Do not administer without medical advice.`,
+      allergyOK:         al => al.length ? `No conflict with profile allergies (${esc(al.join(', '))}).` : 'No allergies recorded in this profile.',
+      ddiText:           n => `${n} potential interaction${n > 1 ? 's' : ''} detected.`,
+      ddiOK:             m => `No interactions detected with: ${esc(m.join(', '))}.`,
+      ddiNone:           'No medications recorded in this profile — add your current treatments to activate the interaction check.',
+      ddiDisclaimer:     'Consult your pharmacist for a complete interaction assessment.',
+      foodNone:          'No significant food interactions known for this molecule.',
+      noDataFDA:         'Data unavailable — no FDA label found for this molecule.',
+      noDataProxy:       'Data unavailable — local proxy not active.',
+      elderlyDefault:    'Use minimum effective dose. Renal and hepatic monitoring recommended. Increased fall risk with sedatives.',
+      pediatricDefault:  (a, w) => `Profile: ${a}y / ${w} kg. Confirm paediatric dosage with a healthcare professional — adult doses do not apply.`,
+      pregnancyDefault:  'Always consult a doctor or pharmacist before any use during pregnancy or breastfeeding.',
+      comboBreakdown:    'Per-ingredient breakdown',
+      translateOn:       '🌐 Translate FDA',
+      translateOff:      '🌐 Translation on',
+      translateNote:     'translated from English',
+      loadingTranslating:'Translating FDA data…',
+      alertTitle:        prof => `⚠ Allergy detected — ${prof}'s profile`,
+      alertBody:         drug => `This medication contains an active ingredient listed as an allergy. Do not administer without medical advice.`,
+      sourcesLabel:      'Sources:',
+      recentAgo:         n => n === 0 ? 'just now' : `${n} min ago`,
+    }
+  };
+
+  let lang = 'fr';
+  const t = (k, ...a) => { const v = S[lang][k]; return typeof v === 'function' ? v(...a) : (v ?? k); };
+
+  function setLang(l) {
+    lang = l;
+    document.documentElement.lang = l;
+    document.getElementById('btn-fr').classList.toggle('active', l === 'fr');
+    document.getElementById('btn-en').classList.toggle('active', l === 'en');
+    document.querySelectorAll('[data-i18n]').forEach(el => { const v = t(el.dataset.i18n); if (v) el.innerHTML = v; });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => el.placeholder = t(el.dataset.i18nPlaceholder));
+    // Show translate toggle only in French
+    const btnTr = document.getElementById('btn-translate');
+    if (btnTr) btnTr.style.display = l === 'fr' ? 'flex' : 'none';
+    updateTranslateBtn();
+    renderProfileGrid();
+    renderRecentChecks();
+    renderProfilesSidebar();
+  }
+
+  /* ── App state ─────────────────────────────────────────────── */
+  let profiles       = [];
+  let activeProfile  = null;   // index selected on home view
+  let profilesActive = null;   // index selected in profiles view
+  let hasUnsaved     = false;
+  let recentChecks   = [];     // { query, displayName, profileName, flag, ts }
+  let currentView    = 'home';
+
+  function markUnsaved() { hasUnsaved = true;  document.getElementById('unsaved-dot').style.display = 'block'; }
+  function markSaved()   { hasUnsaved = false; document.getElementById('unsaved-dot').style.display = 'none'; }
+
+  window.addEventListener('beforeunload', e => {
+    if (hasUnsaved && profiles.length > 0) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  /* ── View management ───────────────────────────────────────── */
+  function switchView(v) {
+    currentView = v;
+    document.getElementById('view-home').style.display     = v === 'home'     ? 'block' : 'none';
+    document.getElementById('view-results').style.display  = v === 'results'  ? 'block' : 'none';
+    document.getElementById('view-profiles').style.display = v === 'profiles' ? 'block' : 'none';
+    if (v === 'profiles') {
+      renderProfilesSidebar();
+      if (profilesActive !== null) renderProfileDetail(profilesActive);
+    }
+  }
+
+  function toggleProv(checked) {
+    document.body.classList.toggle('hide-prov', !checked);
+  }
+
+  /* ── File load / save ──────────────────────────────────────── */
+  function triggerLoadProfiles() {
+    if (hasUnsaved && profiles.length > 0 && !confirm(t('confirmUnsaved'))) return;
+    document.getElementById('file-input').click();
+  }
+
+  function handleFileLoad(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const loaded = Array.isArray(data) ? data : (data.profiles || []);
+        if (profiles.length > 0 && !confirm(t('confirmReplace'))) { e.target.value = ''; return; }
+        profiles = loaded;
+        activeProfile = profiles.length > 0 ? 0 : null;
+        profilesActive = activeProfile;
+        markSaved();
+        renderProfileGrid();
+        renderProfilesSidebar();
+        if (currentView === 'profiles' && profilesActive !== null) renderProfileDetail(profilesActive);
+      } catch { alert('Fichier JSON invalide / Invalid JSON file'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  function openSaveDialog() {
+    const native = !!window.showSaveFilePicker;
+    const note = native
+      ? (lang === 'fr' ? 'Choisissez l\'emplacement dans la fenêtre suivante.' : 'Choose the save location in the next window.')
+      : (lang === 'fr'
+          ? 'Le fichier sera téléchargé dans Téléchargements. Activez <em>« Toujours demander l\'emplacement »</em> dans les paramètres de téléchargement pour choisir le dossier.'
+          : 'The file will download to your Downloads folder. Enable <em>"Always ask where to save"</em> in download settings to choose the location.');
+
+    document.getElementById('modal-title').textContent = t('saveDialogTitle');
+    document.getElementById('modal-body').innerHTML = `
+      <p style="font-size:13px;color:var(--text-500);margin-bottom:14px;">${t('saveDialogInfo', profiles.length)}</p>
+      <div class="form-group">
+        <label class="form-label">${t('saveDialogLabel')}</label>
+        <input class="form-input" id="save-filename" value="profiles.json"
+               onkeydown="if(event.key==='Enter') confirmSave()">
+      </div>
+      <p style="font-size:11px;color:var(--text-400);margin-top:4px;">${native ? '📂' : '⬇️'} ${note}</p>
+    `;
+    const footer = document.getElementById('modal-footer');
+    footer.innerHTML = '';
+    const c = document.createElement('button'); c.className = 'btn btn-ghost'; c.textContent = t('btnCancel'); c.onclick = closeModal; footer.appendChild(c);
+    const s = document.createElement('button'); s.className = 'btn btn-primary'; s.textContent = t('saveDialogBtn'); s.onclick = confirmSave; footer.appendChild(s);
+    openModal();
+    setTimeout(() => { const inp = document.getElementById('save-filename'); if (inp) { inp.focus(); inp.select(); } }, 50);
+  }
+
+  async function confirmSave() {
+    let filename = (document.getElementById('save-filename')?.value.trim() || 'profiles.json');
+    if (!filename.endsWith('.json')) filename += '.json';
+    closeModal();
+    await saveProfiles(filename);
+  }
+
+  async function saveProfiles(filename = 'profiles.json') {
+    const json = JSON.stringify(profiles, null, 2);
+    if (window.showSaveFilePicker) {
+      try {
+        const fh = await window.showSaveFilePicker({ suggestedName: filename, types: [{ description: 'JSON file', accept: { 'application/json': ['.json'] } }] });
+        const w = await fh.createWritable();
+        await w.write(json); await w.close();
+        markSaved();
+        showToast(lang === 'fr' ? '✓ Fichier enregistré.' : '✓ File saved.', 'success');
+        return;
+      } catch (err) { if (err.name === 'AbortError') return; }
+    }
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url); markSaved();
+    showToast(lang === 'fr' ? `⬇️ Enregistré dans Téléchargements — « ${filename} »` : `⬇️ Saved to Downloads — « ${filename} »`, 'info');
+  }
+
+  /* ── Profile helpers ───────────────────────────────────────── */
+  const emoji    = p => p.category === 'elderly' ? (p.sex === 'female' ? '👵' : '👴') : p.category === 'child' ? (p.sex === 'female' ? '👧' : '👦') : (p.sex === 'female' ? '👩' : '👨');
+  const catLabel = p => t(p.category === 'child' ? 'child' : p.category === 'elderly' ? 'elderly' : 'adult');
+  const roleText = p => {
+    if ((p.category === 'child' || p.category === 'elderly') && p.age != null) return `${catLabel(p)} · ${p.age} ${lang === 'fr' ? 'ans' : 'y'}`;
+    return catLabel(p);
+  };
+
+  /* ── Home: profile grid ────────────────────────────────────── */
+  function renderProfileGrid() {
+    const grid = document.getElementById('profile-grid');
+    grid.innerHTML = '';
+    profiles.forEach((p, i) => {
+      const card = document.createElement('div');
+      card.className = 'profile-card' + (activeProfile === i ? ' active' : '');
+      const meds = p.medications?.length || 0;
+      const alls = p.allergies?.length   || 0;
+      card.innerHTML = `
+        <div class="profile-avatar">${emoji(p)}</div>
+        <div>
+          <div class="profile-card-name">${esc(p.name)}</div>
+          <div class="profile-card-role">${esc(roleText(p))}</div>
+          <div class="profile-card-badges">
+            ${meds > 0 ? `<span class="pmb">💊 ${meds}</span>` : ''}
+            ${alls > 0 ? `<span class="pmb pmb-red">⚠ ${alls}</span>` : ''}
+          </div>
+        </div>`;
+      card.addEventListener('click', () => { activeProfile = i; renderProfileGrid(); });
+      grid.appendChild(card);
+    });
+    const add = document.createElement('div');
+    add.className = 'profile-card-add';
+    add.innerHTML = `<span style="color:var(--text-400);font-size:20px;">＋</span><span style="font-size:12px;color:var(--text-500);font-weight:600;">${t('newProfile')}</span>`;
+    add.addEventListener('click', openAddProfile);
+    grid.appendChild(add);
+  }
+
+  /* ── Recent checks ─────────────────────────────────────────── */
+  function renderRecentChecks() {
+    const list = document.getElementById('recent-list');
+    if (!recentChecks.length) {
+      list.innerHTML = `<div class="recent-empty">${t('noRecent')}</div>`;
+      return;
+    }
+    const cfg = {
+      none:    { cls: 'ri-green',  icon: '✅', badge: { fr: '✓ OK',       en: '✓ OK' } },
+      warning: { cls: 'ri-amber',  icon: '⚠️', badge: { fr: '⚠ Alerte',   en: '⚠ Alert' } },
+      danger:  { cls: 'ri-red',    icon: '🚨', badge: { fr: '⚠ Critique', en: '⚠ Critical' } },
+      info:    { cls: 'ri-blue',   icon: 'ℹ️', badge: { fr: 'ℹ Info',     en: 'ℹ Info' } },
+    };
+    list.innerHTML = '';
+    recentChecks.forEach(r => {
+      const c   = cfg[r.flag] || cfg.info;
+      const ago = Math.round((Date.now() - r.ts) / 60000);
+      const row = document.createElement('div');
+      row.className = 'recent-row';
+      row.style.padding = '0 16px';
+      row.innerHTML = `
+        <div class="recent-row-left">
+          <div class="recent-icon ${c.cls}">${c.icon}</div>
+          <div>
+            <div class="recent-drug">${esc(r.displayName)}</div>
+            <div class="recent-meta">${esc(r.profileName)} · ${t('recentAgo', ago)}</div>
+          </div>
+        </div>
+        <span class="badge badge-${r.flag === 'danger' ? 'red' : r.flag === 'warning' ? 'amber' : r.flag === 'none' ? 'green' : 'blue'}">${c.badge[lang]}</span>`;
+      list.appendChild(row);
+    });
+  }
+
+  /* ── Profiles view: sidebar ────────────────────────────────── */
+  function renderProfilesSidebar() {
+    const list = document.getElementById('profiles-list');
+    list.innerHTML = '';
+    profiles.forEach((p, i) => {
+      const item = document.createElement('div');
+      item.className = 'sidebar-profile-item' + (profilesActive === i ? ' active' : '');
+      item.innerHTML = `
+        <span style="font-size:18px;">${emoji(p)}</span>
+        <div>
+          <div class="sp-name">${esc(p.name)}</div>
+          <div class="sp-role">${esc(roleText(p))}</div>
+        </div>`;
+      item.addEventListener('click', () => { profilesActive = i; renderProfilesSidebar(); renderProfileDetail(i); });
+      list.appendChild(item);
+    });
+  }
+
+  /* ── Profiles view: detail panel ──────────────────────────── */
+  function renderProfileDetail(i) {
+    const p = profiles[i]; if (!p) return;
+    document.getElementById('profile-empty-state').style.display = 'none';
+    const detail = document.getElementById('profile-detail');
+    detail.style.display = 'block';
+    const tagHtml = (arr, cls) => arr?.length
+      ? arr.map(v => `<span class="tag ${cls}">${esc(v)}</span>`).join('')
+      : `<span style="color:var(--text-400);font-size:13px;">—</span>`;
+    const sexLabel = { male: lang === 'fr' ? 'Masculin' : 'Male', female: lang === 'fr' ? 'Féminin' : 'Female', other: lang === 'fr' ? 'Autre' : 'Other' };
+    const medsCount = p.medications?.length || 0;
+    detail.innerHTML = `
+      <div class="pd-header">
+        <div class="pd-avatar-row">
+          <div class="pd-avatar">${emoji(p)}</div>
+          <div>
+            <div class="pd-name">${esc(p.name)}</div>
+            <div class="pd-role">${esc(roleText(p))} · ${sexLabel[p.sex] || ''}</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="openEditProfile(${i})">✏ ${lang === 'fr' ? 'Modifier' : 'Edit'}</button>
+      </div>
+      <div class="divider" style="margin-bottom:4px;"></div>
+      <div class="field-row">
+        <span class="field-label">${t('fieldCategory')}</span>
+        <span class="field-value">${catLabel(p)}</span>
+      </div>
+      ${p.category === 'child' ? `
+      <div class="field-row">
+        <span class="field-label">${t('fieldAge')}</span>
+        <span class="field-value">${p.age != null ? p.age + (lang === 'fr' ? ' ans' : ' y') : '—'}</span>
+      </div>
+      <div class="field-row">
+        <span class="field-label">${t('fieldWeight')}</span>
+        <span class="field-value">${p.weight != null ? p.weight + ' kg' : '—'}</span>
+      </div>` : ''}
+      <div class="field-row">
+        <span class="field-label">${t('fieldPregnancy')}</span>
+        <span class="field-value">${p.pregnant ? (lang === 'fr' ? 'Oui' : 'Yes') : (lang === 'fr' ? 'Non' : 'No')}</span>
+      </div>
+      <div class="field-row">
+        <span class="field-label">${t('fieldAllergies')}</span>
+        <div class="field-tags">${tagHtml(p.allergies, 'tag-red')}</div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">${t('fieldMedications')}</span>
+        <div class="field-tags">${tagHtml(p.medications, 'tag-blue')}</div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">${t('fieldConditions')}</span>
+        <div class="field-tags">${tagHtml(p.conditions, 'tag-amber')}</div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">${t('fieldIntolerances')}</span>
+        <div class="field-tags">${tagHtml(p.intolerances, 'tag-amber')}</div>
+      </div>
+      ${medsCount > 0 ? `
+      <div id="pd-meds-warning">
+        <span>⚠️</span>
+        <p><strong>${medsCount} ${lang === 'fr' ? 'médicament' : 'medication'}${medsCount > 1 ? 's' : ''} ${lang === 'fr' ? 'actifs' : 'active'}</strong> — ${lang === 'fr' ? 'les interactions seront vérifiées avec' : 'interactions will be checked with'} <em>${esc((p.medications || []).slice(0, 2).join(', '))}${medsCount > 2 ? '…' : ''}</em>.</p>
+      </div>` : ''}
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border-lt);display:flex;justify-content:flex-end;">
+        <button class="btn btn-outline-red btn-sm" onclick="confirmDeleteProfile(${i})">🗑 ${t('btnDelete')}</button>
+      </div>`;
+  }
+
+  function confirmDeleteProfile(i) {
+    if (!confirm(t('confirmDelete'))) return;
+    profiles.splice(i, 1);
+    profilesActive = profiles.length > 0 ? 0 : null;
+    if (activeProfile >= profiles.length) activeProfile = profiles.length > 0 ? 0 : null;
+    markUnsaved(); renderProfileGrid(); renderProfilesSidebar();
+    document.getElementById('profile-detail').style.display = 'none';
+    document.getElementById('profile-empty-state').style.display = '';
+    if (profilesActive !== null) renderProfileDetail(profilesActive);
+  }
+
+  /* ── Profile modal (add / edit) ────────────────────────────── */
+  let editIdx = null, mTags = {};
+
+  function openAddProfile() {
+    editIdx = null; mTags = { allergies: [], intolerances: [], conditions: [], medications: [] };
+    buildModal(null);
+  }
+  function openEditProfile(i) {
+    editIdx = i; const p = profiles[i];
+    mTags = { allergies: [...(p.allergies || [])], intolerances: [...(p.intolerances || [])], conditions: [...(p.conditions || [])], medications: [...(p.medications || [])] };
+    buildModal(p);
+  }
+
+  function buildModal(p) {
+    document.getElementById('modal-title').textContent = p ? t('editProfileTitle') : t('addProfileTitle');
+    const isChild = p?.category === 'child';
+    document.getElementById('modal-body').innerHTML = `
+      <div class="form-group">
+        <label class="form-label">${t('fieldName')}</label>
+        <input class="form-input" id="f-name" value="${esc(p?.name || '')}" placeholder="ex : Marie">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">${t('fieldSex')}</label>
+          <select class="form-select" id="f-sex">
+            <option value="male"   ${p?.sex === 'male'   ? 'selected' : ''}>♂ ${t('sexMale')}</option>
+            <option value="female" ${p?.sex === 'female' ? 'selected' : ''}>♀ ${t('sexFemale')}</option>
+            <option value="other"  ${p?.sex === 'other'  ? 'selected' : ''}>⊘ ${t('sexOther')}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">${t('fieldCategory')}</label>
+          <select class="form-select" id="f-category" onchange="toggleChildFields()">
+            <option value="child"   ${p?.category === 'child'   ? 'selected' : ''}>👦 ${t('catChild')}</option>
+            <option value="adult"   ${!p || p?.category === 'adult' ? 'selected' : ''}>🧑 ${t('catAdult')}</option>
+            <option value="elderly" ${p?.category === 'elderly' ? 'selected' : ''}>👴 ${t('catElderly')}</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row conditional-field${isChild ? ' visible' : ''}" id="child-fields">
+        <div class="form-group">
+          <label class="form-label">${t('fieldAge')}</label>
+          <input class="form-input" id="f-age" type="number" min="0" max="17" value="${p?.age ?? ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">${t('fieldWeight')}</label>
+          <input class="form-input" id="f-weight" type="number" min="0" step="0.1" value="${p?.weight ?? ''}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;">
+          <input type="checkbox" id="f-pregnant" ${p?.pregnant ? 'checked' : ''}> ${t('fieldPregnancy')}
+        </label>
+      </div>
+      ${tf('allergies',    t('fieldAllergies'),    t('tagHintAllergies'))}
+      ${tf('intolerances', t('fieldIntolerances'), t('tagHintAllergies'))}
+      ${tf('conditions',   t('fieldConditions'),   t('tagHintConditions'))}
+      ${tf('medications',  t('fieldMedications'),  t('tagHintMedications'))}
+    `;
+    ['allergies', 'intolerances', 'conditions', 'medications'].forEach(renderTags);
+    const footer = document.getElementById('modal-footer');
+    footer.innerHTML = '';
+    if (p) {
+      const d = document.createElement('button'); d.className = 'btn btn-outline-red btn-sm'; d.style.marginRight = 'auto';
+      d.textContent = t('btnDelete'); d.onclick = () => deleteProfile(editIdx); footer.appendChild(d);
+    }
+    const c = document.createElement('button'); c.className = 'btn btn-ghost'; c.textContent = t('btnCancel'); c.onclick = closeModal; footer.appendChild(c);
+    const s = document.createElement('button'); s.className = 'btn btn-primary'; s.textContent = t('btnSave'); s.onclick = saveProfile; footer.appendChild(s);
+    openModal();
+  }
+
+  const tf = (field, label, hint) => `
+    <div class="form-group">
+      <label class="form-label">${label}</label>
+      <div class="tag-list" id="tags-${field}"></div>
+      <div class="tag-input-row">
+        <input class="form-input" id="tag-input-${field}" placeholder="${hint}"
+          onkeydown="handleTagKey(event,'${field}')">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="addTag('${field}')">＋</button>
+      </div>
+    </div>`;
+
+  function renderTags(field) {
+    const c = document.getElementById(`tags-${field}`); if (!c) return;
+    c.innerHTML = '';
+    mTags[field].forEach((tag, i) => {
+      const s = document.createElement('span'); s.className = 'tag tag-blue';
+      s.innerHTML = `${esc(tag)} <button class="tag-remove" onclick="removeTag('${field}',${i})">×</button>`;
+      c.appendChild(s);
+    });
+  }
+  function addTag(field) {
+    const inp = document.getElementById(`tag-input-${field}`), val = inp.value.trim();
+    if (!val || mTags[field].includes(val)) { inp.value = ''; inp.focus(); return; }
+    mTags[field].push(val); renderTags(field); inp.value = ''; inp.focus();
+  }
+  function removeTag(field, i)    { mTags[field].splice(i, 1); renderTags(field); }
+  function handleTagKey(e, field) { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(field); } }
+  function toggleChildFields()    { document.getElementById('child-fields').classList.toggle('visible', document.getElementById('f-category').value === 'child'); }
+
+  function saveProfile() {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { document.getElementById('f-name').focus(); return; }
+    const cat = document.getElementById('f-category').value;
+    const prof = {
+      name, sex: document.getElementById('f-sex').value, category: cat,
+      pregnant: document.getElementById('f-pregnant').checked,
+      allergies: [...mTags.allergies], intolerances: [...mTags.intolerances],
+      conditions: [...mTags.conditions], medications: [...mTags.medications]
+    };
+    if (cat === 'child') {
+      prof.age    = parseFloat(document.getElementById('f-age').value)    || 0;
+      prof.weight = parseFloat(document.getElementById('f-weight').value) || 0;
+    }
+    if (editIdx !== null) { profiles[editIdx] = prof; } else { profiles.push(prof); activeProfile = profiles.length - 1; }
+    markUnsaved(); closeModal(); renderProfileGrid(); renderProfilesSidebar();
+    if (currentView === 'profiles') {
+      const idx = editIdx !== null ? editIdx : profiles.length - 1;
+      profilesActive = idx; renderProfilesSidebar(); renderProfileDetail(idx);
+    }
+  }
+
+  function deleteProfile(i) {
+    if (!confirm(t('confirmDelete'))) return;
+    profiles.splice(i, 1);
+    activeProfile  = profiles.length > 0 ? 0 : null;
+    profilesActive = profiles.length > 0 ? 0 : null;
+    markUnsaved(); closeModal(); renderProfileGrid(); renderProfilesSidebar();
+    if (profilesActive !== null) renderProfileDetail(profilesActive);
+    else { document.getElementById('profile-detail').style.display = 'none'; document.getElementById('profile-empty-state').style.display = ''; }
+  }
+
+  function openModal()  { document.getElementById('modal-overlay').classList.add('visible'); }
+  function closeModal() { document.getElementById('modal-overlay').classList.remove('visible'); }
+  function handleOverlayClick(e) { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
+
+  /* ── Utility functions ─────────────────────────────────────── */
+  const esc   = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const trunc = (s, n = 600) => { if (!s) return null; s = s.replace(/\s+/g, ' ').trim(); return s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, '') + '…'; };
+  const capFirst = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+  async function jFetch(url) {
+    try {
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (_) { return null; }
+  }
+
+  /* ── Loading helpers ───────────────────────────────────────── */
+  function showLoading(msg) {
+    document.getElementById('loading-overlay').classList.add('visible');
+    if (msg) document.getElementById('loading-msg').textContent = msg;
+  }
+  function setLoadingMsg(msg) { const el = document.getElementById('loading-msg'); if (el) el.textContent = msg; }
+  function hideLoading() { document.getElementById('loading-overlay').classList.remove('visible'); }
+
+  /* ── Toast ─────────────────────────────────────────────────── */
+  function showToast(msg, type = 'info') {
+    document.getElementById('save-toast')?.remove();
+    const c = type === 'success'
+      ? { bg: 'var(--green-lt)', border: '#86efac', text: 'var(--green)' }
+      : { bg: 'var(--blue-lt)',  border: '#93c5fd', text: 'var(--blue)' };
+    const toast = document.createElement('div');
+    toast.id = 'save-toast';
+    toast.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${c.bg};border:1px solid ${c.border};color:${c.text};padding:10px 20px;border-radius:50px;font-size:13px;font-weight:600;font-family:var(--sans);box-shadow:var(--shadow-lg);z-index:999;white-space:nowrap;animation:toastIn .2s ease;`;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.transition = 'opacity .3s'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 350); }, 3500);
+  }
+
+  /* ── Lookup tables ─────────────────────────────────────────── */
+  const FR_INN_TO_BRANDS = {
+    'paracetamol':             ['Doliprane', 'Dafalgan', 'Efferalgan', 'Panadol'],
+    'ibuprofen':               ['Advil', 'Nurofen', 'Brufen'],
+    'aspirin':                 ['Aspirine UPSA', 'Aspégic', 'Kardégic'],
+    'amoxicillin':             ['Clamoxyl', 'Amoxil'],
+    'amoxicillin clavulanate': ['Augmentin'],
+    'warfarin':                ['Coumadine'],
+    'acenocoumarol':           ['Sintrom'],
+    'bromazepam':              ['Lexomil'],
+    'alprazolam':              ['Xanax'],
+    'diazepam':                ['Valium'],
+    'zolpidem':                ['Stilnox'],
+    'zopiclone':               ['Imovane'],
+    'esomeprazole':            ['Inexium'],
+    'omeprazole':              ['Mopral', 'Losec'],
+    'pantoprazole':            ['Inipomp', 'Eupantol'],
+    'metformin':               ['Glucophage', 'Metformine'],
+    'furosemide':              ['Lasilix'],
+    'amlodipine':              ['Amlor'],
+    'simvastatin':             ['Zocor'],
+    'atorvastatin':            ['Tahor'],
+    'rosuvastatin':            ['Crestor'],
+    'fluoxetine':              ['Prozac'],
+    'paroxetine':              ['Deroxat'],
+    'escitalopram':            ['Seroplex'],
+    'levothyroxine':           ['Levothyrox'],
+    'prednisone':              ['Cortancyl'],
+    'diclofenac':              ['Voltarène'],
+    'ketoprofen':              ['Profénid'],
+    'tramadol':                ['Topalgic', 'Ixprim'],
+    'azithromycin':            ['Zithromax'],
+    'phloroglucinol':          ['Spasfon'],
+    'diosmectite':             ['Smecta'],
+    'codeine':                 ['Codéine Biogaran'],
+    'lorazepam':               ['Temesta'],
+    'clonazepam':              ['Rivotril'],
+  };
+
+  const FR_BRAND_TO_INN = {
+    'doliprane': 'paracetamol', 'efferalgan': 'paracetamol', 'dafalgan': 'paracetamol', 'paracetamol': 'paracetamol', 'paracetamol codeine': 'paracetamol codeine',
+    'advil': 'ibuprofen', 'nurofen': 'ibuprofen', 'brufen': 'ibuprofen',
+    'aspegic': 'aspirin', 'aspirine upsa': 'aspirin', 'kardegic': 'aspirin', 'aspirine': 'aspirin',
+    'clamoxyl': 'amoxicillin', 'amoxicilline': 'amoxicillin',
+    'augmentin': 'amoxicillin clavulanate',
+    'coumadine': 'warfarin', 'sintrom': 'acenocoumarol',
+    'lexomil': 'bromazepam', 'xanax': 'alprazolam', 'valium': 'diazepam', 'temesta': 'lorazepam', 'rivotril': 'clonazepam',
+    'inexium': 'esomeprazole', 'mopral': 'omeprazole', 'inipomp': 'pantoprazole',
+    'zithromax': 'azithromycin',
+    'spasfon': 'phloroglucinol', 'smecta': 'diosmectite',
+    'voltarene': 'diclofenac', 'profenid': 'ketoprofen',
+    'ixprim': 'tramadol', 'topalgic': 'tramadol',
+    'stilnox': 'zolpidem', 'imovane': 'zopiclone',
+    'metformine': 'metformin', 'glucophage': 'metformin',
+    'lasilix': 'furosemide', 'furosemide': 'furosemide',
+    'amlor': 'amlodipine',
+    'zocor': 'simvastatin', 'tahor': 'atorvastatin', 'crestor': 'rosuvastatin',
+    'prozac': 'fluoxetine', 'deroxat': 'paroxetine', 'seroplex': 'escitalopram',
+    'levothyrox': 'levothyroxine',
+    'cortancyl': 'prednisone',
+    'doliprane codeine': 'paracetamol codeine',
+    'doliprane codeíne': 'paracetamol codeine',
+    'doliprane codéiné': 'paracetamol codeine',
+    // Ophtalmologie
+    'tobradex': 'tobramycin dexamethasone',
+    'tobrex': 'tobramycin',
+    'maxidex': 'dexamethasone',
+    'ciloxan': 'ciprofloxacin',
+    'floxal': 'ofloxacin',
+    // Rhinologie / ORL
+    'rhinocort': 'budesonide',
+    'nasonex': 'mometasone',
+    'avamys': 'fluticasone furoate',
+    // Dermatologie
+    'dermovate': 'clobetasol',
+    'diprosone': 'betamethasone',
+    'celestoderm': 'betamethasone',
+    'triderm': 'betamethasone clotrimazole gentamicin',
+    // Antifongiques
+    'triflucan': 'fluconazole',
+    'lamisil': 'terbinafine',
+    'daktarin': 'miconazole',
+    // Autres courants
+    'aerius': 'desloratadine',
+    'clarityne': 'loratadine',
+    'zyrtec': 'cetirizine',
+    'atarax': 'hydroxyzine',
+    'motilium': 'domperidone',
+    'imodium': 'loperamide',
+    'biseptol': 'trimethoprim sulfamethoxazole',
+    'bactrim': 'trimethoprim sulfamethoxazole',
+    'orelox': 'cefpodoxime',
+  };
+
+  const INN_USAN_MAP = {
+    'paracetamol': 'acetaminophen', 'acetaminophen': 'paracetamol',
+    'adrenaline':  'epinephrine',   'epinephrine':   'adrenaline',
+    'noradrenaline':'norepinephrine','norepinephrine':'noradrenaline',
+    'salbutamol':  'albuterol',     'albuterol':     'salbutamol',
+    'lignocaine':  'lidocaine',     'lidocaine':     'lignocaine',
+    'amethocaine': 'tetracaine',    'tetracaine':    'amethocaine',
+    'frusemide':   'furosemide',    'furosemide':    'frusemide',
+    'phytomenadione':'phytonadione','phytonadione':  'phytomenadione',
+  };
+
+  const INN_USAN_PAIRS = [
+    ['paracetamol', 'acetaminophen'],
+    ['adrenaline',  'epinephrine'],
+    ['noradrenaline','norepinephrine'],
+    ['salbutamol',  'albuterol'],
+    ['lignocaine',  'lidocaine'],
+    ['amethocaine', 'tetracaine'],
+    ['frusemide',   'furosemide'],
+    ['phytomenadione','phytonadione'],
+  ];
+
+  function normalizeQuery(q) {
+    return String(q || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, ' ').trim().toLowerCase();
+  }
+
+  function resolveAllNames(term) {
+    const n = normalizeQuery(term);
+    const syn = INN_USAN_MAP[n];
+    return syn ? [n, syn] : [n];
+  }
+
+  function getDualName(term) {
+    const n = normalizeQuery(term);
+    for (const [inn, usan] of INN_USAN_PAIRS) {
+      if (n === inn || n === usan) return { inn, usan };
+    }
+    return null;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     AUTOCOMPLETE
+  ══════════════════════════════════════════════════════════════ */
+  const AC_MIN   = 3;    // trigger after N chars
+  const AC_DELAY = 220;  // debounce ms
+  const AC_MAX   = 12;   // max suggestions shown (scrollable)
+  let acTimer    = null;
+  let acIdx      = -1;
+  let acItems    = [];
+  let _acSelectedItem = null; // last autocomplete item clicked (cleared on each search)
+
+  function onDrugInput(e) {
+    const val = e.target.value;
+    // Show/hide clear button
+    const clearBtn = document.getElementById('drug-input-clear');
+    if (clearBtn) clearBtn.classList.toggle('visible', val.length > 0);
+    clearTimeout(acTimer);
+    if (!dbReady || val.trim().length < AC_MIN) { acClose(); return; }
+    acTimer = setTimeout(() => acFetch(val.trim()), AC_DELAY);
+  }
+
+  function clearDrugInput() {
+    const inp = document.getElementById('drug-input');
+    inp.value = '';
+    inp.focus();
+    document.getElementById('drug-input-clear')?.classList.remove('visible');
+    acClose();
+  }
+
+  function onDrugKeydown(e) {
+    const dd = document.getElementById('autocomplete-dropdown');
+    const open = dd.classList.contains('visible');
+    if (e.key === 'Enter') {
+      if (open && acIdx >= 0 && acItems[acIdx]) { e.preventDefault(); acSelect(acItems[acIdx].name, acItems[acIdx]); }
+      else { acClose(); searchDrug(); }
+    } else if (e.key === 'ArrowDown') { if (!open) return; e.preventDefault(); acMove(1); }
+    else if (e.key === 'ArrowUp')   { if (!open) return; e.preventDefault(); acMove(-1); }
+    else if (e.key === 'Escape')    { acClose(); }
+  }
+
+  async function acFetch(query) {
+    const beR = localSearchBe(query);
+    const frR = localSearchFr(query);
+    const seen = new Set(), results = [];
+    (Array.isArray(beR) ? beR : []).forEach(n => { const k = normalizeQuery(n); if (!seen.has(k)) { seen.add(k); results.push({ name: n, source: 'BE' }); } });
+    (Array.isArray(frR) ? frR : []).forEach(n => { const k = normalizeQuery(n); if (!seen.has(k)) { seen.add(k); results.push({ name: n, source: 'FR' }); } });
+    acRender(results.slice(0, AC_MAX));
+  }
+
+  function acRender(items) {
+    const dd = document.getElementById('autocomplete-dropdown');
+    acItems = items; acIdx = -1;
+    if (!items.length) {
+      dd.innerHTML = `<div class="ac-empty">${lang === 'fr' ? 'Aucune suggestion' : 'No suggestions'}</div>`;
+      dd.classList.add('visible'); return;
+    }
+    dd.innerHTML = items.map((item, i) => `
+      <div class="ac-item" data-idx="${i}">
+        <span class="ac-item-name">${esc(item.name)}</span>
+        <span class="ac-item-badge ${item.source === 'BE' ? 'ac-badge-be' : 'ac-badge-fr'}">${item.source}</span>
+      </div>`).join('');
+    dd.querySelectorAll('.ac-item').forEach((el, i) => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); acSelect(acItems[i].name, acItems[i]); });
+    });
+    dd.classList.add('visible');
+  }
+
+  function acMove(dir) {
+    const dd = document.getElementById('autocomplete-dropdown');
+    const nodes = dd.querySelectorAll('.ac-item'); if (!nodes.length) return;
+    nodes[acIdx]?.classList.remove('ac-active');
+    acIdx = Math.max(0, Math.min(acItems.length - 1, acIdx + dir));
+    nodes[acIdx]?.classList.add('ac-active');
+    nodes[acIdx]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function acSelect(name, item = null) { _acSelectedItem = item; document.getElementById('drug-input').value = name; acClose(); searchDrug(); }
+  function acClose() {
+    const dd = document.getElementById('autocomplete-dropdown');
+    dd.classList.remove('visible'); dd.innerHTML = '';
+    acItems = []; acIdx = -1;
+  }
+
+  document.addEventListener('mousedown', e => {
+    const dd = document.getElementById('autocomplete-dropdown');
+    if (dd.contains(e.target) || e.target.id === 'drug-input') return;
+    acClose();
+  });
+
+  /* ═══════════════════════════════════════════════════════════════
+     PART 3 — V2 Engine: resolveAnchor · enrichAll · food table
+  ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Remote API constants ──────────────────────────────────── */
+  const RXNORM  = 'https://rxnav.nlm.nih.gov/REST';
+  const OPENFDA = 'https://api.fda.gov/drug';
+  let   dbReady = false;
+  let   dbFr    = null;
+  let   dbBe    = null;
+
+  /* ═══════════════════════════════════════════════════════════════
+     PART 3b — Local SQLite layer (sql.js)
+     Remplace src/proxy.py : les deux .db sont chargés en mémoire
+     dans le navigateur via WebAssembly, et interrogés directement.
+     Chaque fonction locale reproduit exactement la requête et la
+     forme de réponse de son équivalent dans proxy.py.
+  ═══════════════════════════════════════════════════════════════ */
+
+  async function initLocalDb() {
+    try {
+      const SQL = await initSqlJs({ locateFile: file => `src/${file}` });
+      const [frBuf, beBuf] = await Promise.all([
+        fetch('src/drugs_fr.db').then(r => r.arrayBuffer()),
+        fetch('src/drugs_be.db').then(r => r.arrayBuffer())
+      ]);
+      dbFr = new SQL.Database(new Uint8Array(frBuf));
+      dbBe = new SQL.Database(new Uint8Array(beBuf));
+      dbReady = true;
+    } catch (_) {
+      dbReady = false;
+      document.getElementById('db-notice').classList.add('visible');
+    }
+  }
+
+  function queryAll(db, sql, params = []) {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    const rows = [];
+    while (stmt.step()) rows.push(stmt.getAsObject());
+    stmt.free();
+    return rows;
+  }
+  function queryOne(db, sql, params = []) {
+    const rows = queryAll(db, sql, params);
+    return rows.length ? rows[0] : null;
+  }
+
+  /* ── Requêtes France (drugs_fr.db) ──────────────────────────── */
+  function localSearchFr(query, limit = 8) {
+    const rows = queryAll(dbFr, `
+      SELECT DISTINCT denomination
+      FROM specialite
+      WHERE denomination LIKE ?
+        AND etat_commercialisation LIKE '%Commercialis%'
+      ORDER BY
+        CASE WHEN LOWER(denomination) LIKE LOWER(?) THEN 0 ELSE 1 END,
+        LENGTH(denomination),
+        denomination
+      LIMIT ?
+    `, [`%${query}%`, `${query}%`, limit]);
+    return rows.map(r => r.denomination);
+  }
+
+  function localDrugDetailFr(query) {
+    const drug = queryOne(dbFr, `
+      SELECT cis, denomination, forme_pharmaceutique, voies_administration,
+             statut_amm, etat_commercialisation, titulaire, surveillance_renforcee
+      FROM specialite
+      WHERE denomination LIKE ?
+        AND etat_commercialisation LIKE '%Commercialis%'
+      ORDER BY
+        CASE WHEN LOWER(denomination) LIKE LOWER(?) THEN 0 ELSE 1 END,
+        LENGTH(denomination),
+        denomination
+      LIMIT 1
+    `, [`%${query}%`, `${query}%`]);
+    if (!drug) return null;
+    const cis = drug.cis;
+
+    const substances = queryAll(dbFr, `
+      SELECT denomination_substance, dosage, reference_dosage
+      FROM composition
+      WHERE cis = ? AND nature_composant = 'SA'
+    `, [cis]);
+
+    const presentations = queryAll(dbFr, `
+      SELECT DISTINCT libelle, prix_public, taux_remboursement
+      FROM presentation
+      WHERE cis = ?
+      ORDER BY prix_public
+      LIMIT 6
+    `, [cis]);
+
+    const conditions = queryAll(dbFr, `
+      SELECT DISTINCT condition FROM prescription_delivrance WHERE cis = ?
+    `, [cis]);
+
+    const smr = queryOne(dbFr, `
+      SELECT valeur_smr, libelle_smr FROM smr
+      WHERE cis = ? ORDER BY date_avis DESC LIMIT 1
+    `, [cis]);
+
+    const alert = queryOne(dbFr, `
+      SELECT texte_lien FROM info_importante
+      WHERE cis = ? AND date_fin >= date('now')
+      LIMIT 1
+    `, [cis]);
+
+    const generique = queryOne(dbFr, `
+      SELECT libelle_groupe FROM generique WHERE cis = ? LIMIT 1
+    `, [cis]);
+
+    const asmr = queryOne(dbFr, `
+      SELECT valeur_asmr, libelle_asmr FROM asmr
+      WHERE cis = ? ORDER BY date_avis DESC LIMIT 1
+    `, [cis]);
+
+    return {
+      source:        'BDPM',
+      pays:          'FR',
+      cis,
+      nom:           drug.denomination,
+      forme:         drug.forme_pharmaceutique,
+      voies:         drug.voies_administration,
+      statut:        drug.statut_amm,
+      titulaire:     drug.titulaire,
+      surveillance:  drug.surveillance_renforcee,
+      substances:    substances.map(s => ({ nom: s.denomination_substance, dosage: s.dosage, reference: s.reference_dosage })),
+      presentations: presentations.map(p => ({ libelle: p.libelle, prix: p.prix_public, remboursement: p.taux_remboursement })),
+      conditions:    conditions.map(c => c.condition),
+      smr:           smr ? { valeur: smr.valeur_smr, libelle: smr.libelle_smr } : null,
+      asmr:          asmr ? { valeur: asmr.valeur_asmr, libelle: asmr.libelle_asmr } : null,
+      alerte:        alert ? alert.texte_lien : null,
+      generique:     generique ? generique.libelle_groupe : null,
+    };
+  }
+
+  function localBrandsFr(substance, limit = 60) {
+    const drugs = queryAll(dbFr, `
+      SELECT DISTINCT s.cis, s.denomination, s.forme_pharmaceutique, s.titulaire
+      FROM specialite s
+      JOIN composition c ON s.cis = c.cis
+      WHERE UPPER(c.denomination_substance) LIKE UPPER(?)
+        AND c.nature_composant = 'SA'
+        AND s.etat_commercialisation LIKE '%Commercialis%'
+        AND (SELECT COUNT(*) FROM composition c2
+             WHERE c2.cis = s.cis AND c2.nature_composant = 'SA') = 1
+      ORDER BY s.denomination
+      LIMIT ?
+    `, [`%${substance}%`, limit]);
+
+    const groups = {};
+    for (const d of drugs) {
+      const brand = d.denomination.split(/\s+\d/)[0].trim();
+      const pres = queryOne(dbFr, `
+        SELECT prix_public, taux_remboursement FROM presentation
+        WHERE cis = ? AND prix_public IS NOT NULL
+        ORDER BY prix_public LIMIT 1
+      `, [d.cis]);
+      if (!groups[brand]) groups[brand] = { brand, company: d.titulaire || '', variants: [] };
+      groups[brand].variants.push({
+        name: d.denomination, form: d.forme_pharmaceutique || '',
+        price: pres ? pres.prix_public : null,
+        reimbursement: pres ? pres.taux_remboursement : ''
+      });
+    }
+    const groupList = Object.values(groups);
+    const total = groupList.reduce((sum, g) => sum + g.variants.length, 0);
+    return { substance, country: 'FR', groups: groupList, total };
+  }
+
+  /* ── Requêtes Belgique (drugs_be.db) ────────────────────────── */
+  function localSearchBe(query, limit = 8) {
+    const rows = queryAll(dbBe, `
+      SELECT DISTINCT official_name
+      FROM amp
+      WHERE official_name LIKE ?
+        AND status = 'AUTHORIZED'
+      ORDER BY
+        CASE WHEN LOWER(official_name) LIKE LOWER(?) THEN 0 ELSE 1 END,
+        LENGTH(official_name),
+        official_name
+      LIMIT ?
+    `, [`%${query}%`, `${query}%`, limit]);
+    return rows.map(r => r.official_name);
+  }
+
+  function localDrugDetailBe(query) {
+    const drug = queryOne(dbBe, `
+      SELECT code, official_name, status, medicine_type,
+             company_name, name_fr, name_nl
+      FROM amp
+      WHERE official_name LIKE ?
+        AND status = 'AUTHORIZED'
+      ORDER BY
+        CASE WHEN LOWER(official_name) LIKE LOWER(?) THEN 0 ELSE 1 END,
+        LENGTH(official_name),
+        official_name
+      LIMIT 1
+    `, [`%${query}%`, `${query}%`]);
+    if (!drug) return null;
+    const code = drug.code;
+
+    const forme = queryOne(dbBe, `
+      SELECT form_fr, route_fr FROM pharma_form
+      WHERE amp_code = ? LIMIT 1
+    `, [code]);
+
+    const substances = queryAll(dbBe, `
+      SELECT substance_fr, dosage_qty, dosage_unit
+      FROM ingredient
+      WHERE amp_code = ? AND type = 'ACTIVE_SUBSTANCE'
+      ORDER BY rank
+    `, [code]);
+
+    const presentations = queryAll(dbBe, `
+      SELECT pack_display_fr,
+             COALESCE(public_price, ex_factory_price) AS prix,
+             reimbursable
+      FROM ampp
+      WHERE amp_code = ?
+      ORDER BY reimbursable DESC,
+               COALESCE(public_price, ex_factory_price) NULLS LAST
+      LIMIT 6
+    `, [code]);
+
+    const related = queryAll(dbBe, `
+      SELECT DISTINCT a.official_name
+      FROM amp a
+      JOIN ingredient i ON a.code = i.amp_code
+      WHERE i.substance_fr = (
+          SELECT substance_fr FROM ingredient
+          WHERE amp_code = ? AND type = 'ACTIVE_SUBSTANCE' LIMIT 1
+      )
+      AND i.type = 'ACTIVE_SUBSTANCE'
+      AND a.status = 'AUTHORIZED'
+      AND a.code != ?
+      ORDER BY LENGTH(a.official_name)
+      LIMIT 8
+    `, [code, code]);
+
+    const seenBrands = new Set(), brandsBe = [];
+    for (const r of related) {
+      const brand = r.official_name.split(/\s+\d/)[0].trim();
+      if (brand && !seenBrands.has(brand.toLowerCase())) {
+        seenBrands.add(brand.toLowerCase());
+        brandsBe.push(brand);
+      }
+    }
+
+    return {
+      source:        'SAM',
+      pays:          'BE',
+      code,
+      nom:           drug.official_name,
+      nom_fr:        drug.name_fr,
+      nom_nl:        drug.name_nl,
+      statut:        drug.status,
+      type:          drug.medicine_type,
+      titulaire:     drug.company_name,
+      forme:         forme ? forme.form_fr : null,
+      voie:          forme ? forme.route_fr : null,
+      substances:    substances.map(s => ({ nom: s.substance_fr, dosage: s.dosage_qty, unite: s.dosage_unit })),
+      presentations: presentations.map(p => ({ conditionnement: p.pack_display_fr, prix: p.prix, remboursable: !!p.reimbursable })),
+      brands_be:     brandsBe,
+    };
+  }
+
+  function localBrandsBe(substance, limit = 60) {
+    const drugs = queryAll(dbBe, `
+      SELECT MIN(code) as code, official_name, MIN(company_name) as company_name, MIN(form_fr) as form_fr
+      FROM (
+        SELECT a.code, a.official_name, a.company_name, MIN(pf.form_fr) AS form_fr
+        FROM amp a
+        JOIN ingredient i ON a.code = i.amp_code
+        LEFT JOIN pharma_form pf ON pf.amp_code = a.code
+        WHERE LOWER(i.substance_fr) = LOWER(?)
+          AND i.type = 'ACTIVE_SUBSTANCE'
+          AND a.status = 'AUTHORIZED'
+          AND (SELECT COUNT(*) FROM ingredient i2
+               WHERE i2.amp_code = a.code AND i2.type = 'ACTIVE_SUBSTANCE') = 1
+        GROUP BY a.code
+      )
+      GROUP BY official_name
+      ORDER BY official_name
+      LIMIT ?
+    `, [substance, limit]);
+
+    const groups = {};
+    for (const d of drugs) {
+      const brand = d.official_name.split(/\s+\d/)[0].trim();
+      const pres = queryOne(dbBe, `
+        SELECT COALESCE(public_price, ex_factory_price) AS prix, reimbursable FROM ampp
+        WHERE amp_code = ? AND COALESCE(public_price, ex_factory_price) IS NOT NULL
+        ORDER BY COALESCE(public_price, ex_factory_price) LIMIT 1
+      `, [d.code]);
+      if (!groups[brand]) groups[brand] = { brand, company: d.company_name || '', variants: [] };
+      groups[brand].variants.push({
+        name: d.official_name, form: d.form_fr || '',
+        price: pres ? pres.prix : null,
+        reimbursable: pres ? !!pres.reimbursable : false
+      });
+    }
+    const groupList = Object.values(groups);
+    const total = groupList.reduce((sum, g) => sum + g.variants.length, 0);
+    return { substance, country: 'BE', groups: groupList, total };
+  }
+
+  /* ── Curated food interactions table (ATC-prefix keyed) ────── */
+  /* [REVIEW : source citation — defaulting to FDA Drug Interactions guidance + Meyler's] */
+  const FOOD_INTERACTIONS = {
+    rules: [
+      {
+        id: 'grapefruit_cyp3a4',
+        food: { fr: 'Pamplemousse / orange amère', en: 'Grapefruit / Seville orange' },
+        match: { atc_prefix: ['C10AA', 'C08CA', 'J05A', 'L04AD', 'G04BE'] },
+        severity: 'major',
+        mechanism: 'Inhibition CYP3A4 → ↑ concentration plasmatique',
+        advice: { fr: 'Éviter la consommation pendant le traitement.', en: 'Avoid consumption during treatment.' }
+      },
+      {
+        id: 'alcohol_cns',
+        food: { fr: 'Alcool', en: 'Alcohol' },
+        match: { atc_prefix: ['N05BA', 'N05CD', 'N05CF', 'N02A', 'R06AB', 'R06AD', 'N03AE'] },
+        severity: 'major',
+        mechanism: 'Potentialisation dépression SNC',
+        advice: { fr: 'Éviter strictement l\'alcool.', en: 'Strictly avoid alcohol.' }
+      },
+      {
+        id: 'alcohol_disulfiram',
+        food: { fr: 'Alcool', en: 'Alcohol' },
+        match: { atc_prefix: ['J01XD', 'J01XE', 'J01FA10', 'J01AA'] },
+        severity: 'major',
+        mechanism: 'Réaction disulfiram-like (flush, tachycardie, nausées)',
+        advice: { fr: 'Éviter l\'alcool pendant et 48 h après le traitement.', en: 'Avoid alcohol during and 48 h after treatment.' }
+      },
+      {
+        id: 'dairy_chelation',
+        food: { fr: 'Produits laitiers, antiacides', en: 'Dairy, antacids' },
+        match: { atc_prefix: ['J01AA', 'J01MA', 'M05BA'] },
+        severity: 'moderate',
+        mechanism: 'Chélation par cations divalents → ↓ absorption',
+        advice: { fr: 'Espacer la prise d\'au moins 2 heures des produits laitiers.', en: 'Space dosing at least 2 hours from dairy.' }
+      },
+      {
+        id: 'vitamin_k_warfarin',
+        food: { fr: 'Aliments riches en vitamine K (épinards, brocoli, choux)', en: 'Vitamin K-rich foods (spinach, broccoli, kale)' },
+        match: { atc_prefix: ['B01AA'] },
+        severity: 'major',
+        mechanism: 'Antagonisme anticoagulant → ↓ effet anticoagulant',
+        advice: { fr: 'Maintenir une consommation stable. Ne pas modifier brutalement l\'alimentation.', en: 'Keep intake consistent. Do not drastically change diet.' }
+      },
+      {
+        id: 'tyramine_maois',
+        food: { fr: 'Aliments riches en tyramine (fromage affiné, vin rouge, charcuteries)', en: 'Tyramine-rich foods (aged cheese, red wine, cured meats)' },
+        match: { atc_prefix: ['N06AF', 'N06AG'] },
+        severity: 'major',
+        mechanism: 'Crise hypertensive par accumulation de tyramine',
+        advice: { fr: 'Éviter strictement les aliments riches en tyramine.', en: 'Strictly avoid tyramine-rich foods.' }
+      },
+      {
+        id: 'caffeine_stimulants',
+        food: { fr: 'Caféine (café, thé, boissons énergisantes)', en: 'Caffeine (coffee, tea, energy drinks)' },
+        match: { atc_prefix: ['R03DA', 'N06BA'] },
+        severity: 'moderate',
+        mechanism: 'Potentialisation de l\'effet stimulant / arythmogène',
+        advice: { fr: 'Limiter la consommation de caféine.', en: 'Limit caffeine intake.' }
+      },
+      {
+        id: 'high_fat_griseo',
+        food: { fr: 'Repas riche en graisses', en: 'High-fat meal' },
+        match: { atc_prefix: ['D01BA01', 'J02AC04'] },
+        severity: 'moderate',
+        mechanism: '↑ absorption par les graisses alimentaires',
+        advice: { fr: 'Prendre avec un repas gras pour maximiser l\'absorption.', en: 'Take with a fatty meal to maximise absorption.' }
+      },
+      {
+        id: 'alcohol_paracetamol',
+        food: { fr: 'Alcool', en: 'Alcohol' },
+        match: { atc_prefix: ['N02BE'] },
+        severity: 'moderate',
+        mechanism: 'Alcool chronique → induction CYP2E1 → ↑ métabolite hépatotoxique',
+        advice: { fr: 'Éviter l\'alcool en cas d\'usage chronique ou de doses élevées de paracétamol.', en: 'Avoid alcohol with chronic use or high doses of paracetamol.' }
+      }
+    ]
+  };
+
+  /* ── Allergy conflict detection ────────────────────────────── */
+  function findAllergyConflict(allergies, names, fdaLabel) {
+    if (!allergies?.length) return null;
+    // Build expanded target list (INN ↔ USAN)
+    const targets = [...new Set(names.flatMap(s => resolveAllNames(String(s || ''))))].filter(Boolean);
+    // FDA text for extra coverage
+    const fdaText = [(fdaLabel?.contraindications?.[0] || ''), (fdaLabel?.warnings?.[0] || '')].join(' ').toLowerCase();
+    for (const allergy of allergies) {
+      for (const a of resolveAllNames(allergy)) {
+        if (!a) continue;
+        for (const tgt of targets) {
+          if (tgt.includes(a) || a.includes(tgt.split(' ')[0])) return allergy;
+        }
+        if (fdaText.includes(a)) return allergy;
+      }
+    }
+    return null;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     AUTO-TRANSLATE (FDA EN → FR)
+     Toggle with the 🌐 button in the top bar.
+     Uses MyMemory free API — no key required.
+     To disable permanently: set autoTranslate = false below.
+  ══════════════════════════════════════════════════════════════ */
+
+  let autoTranslate = false; // ← change to true to enable by default
+
+  const TRANSLATE_CACHE = new Map(); // in-session cache keyed by text snippet
+  const MYMEMORY_URL    = 'https://api.mymemory.translated.net/get';
+
+  // Fields of an FDA label to translate (in priority order)
+  const FDA_FIELDS_TO_TRANSLATE = [
+    'indications_and_usage',
+    'dosage_and_administration',
+    'adverse_reactions',
+    'warnings_and_cautions',
+    'contraindications',
+    'pregnancy',
+    'pregnancy_or_breast_feeding',
+    'pediatric_use',
+    'geriatric_use',
+  ];
+
+  function updateTranslateBtn() {
+    const btn   = document.getElementById('btn-translate');
+    const label = document.getElementById('btn-translate-label');
+    if (!btn || !label) return;
+    btn.classList.toggle('active', autoTranslate);
+    label.textContent = autoTranslate
+      ? (lang === 'fr' ? 'Traduction active' : 'Translation on')
+      : (lang === 'fr' ? 'Traduire FDA'      : 'Translate FDA');
+  }
+
+  function toggleAutoTranslate() {
+    autoTranslate = !autoTranslate;
+    updateTranslateBtn();
+  }
+
+  async function translateText(text) {
+    if (!text) return text;
+    const cacheKey = text.slice(0, 80); // key on first 80 chars
+    if (TRANSLATE_CACHE.has(cacheKey)) return TRANSLATE_CACHE.get(cacheKey);
+    const snippet = trunc(text, 480); // MyMemory free tier: ~500 chars/request
+    try {
+      const url = `${MYMEMORY_URL}?q=${encodeURIComponent(snippet)}&langpair=en|fr`;
+      const r = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!r.ok) return text;
+      const data = await r.json();
+      const tx = data?.responseData?.translatedText;
+      if (tx && data?.responseStatus === 200) {
+        TRANSLATE_CACHE.set(cacheKey, tx);
+        return tx;
+      }
+    } catch (_) {}
+    return text; // graceful fallback: show English
+  }
+
+  async function translateFDALabel(fdaLabel) {
+    if (!autoTranslate || lang !== 'fr' || !fdaLabel || fdaLabel._notFound) return fdaLabel;
+    const out = { ...fdaLabel, _translated: true };
+    await Promise.all(FDA_FIELDS_TO_TRANSLATE.map(async field => {
+      const raw = fdaLabel[field]?.[0];
+      if (raw) out[field] = [await translateText(raw)];
+    }));
+    return out;
+  }
+
+  /* ── Step 1: resolveAnchor ─────────────────────────────────── */
+  async function resolveAnchor(query) {
+    const normalized   = normalizeQuery(query);
+    // firstWord = brand base name, handles full product names from autocomplete
+    // e.g. "Tobradex 1 mg/g - 3 mg/g" → firstWord = "tobradex"
+    const firstWord    = normalized.split(/\s+/)[0];
+    const innFromBrand = FR_BRAND_TO_INN[normalized]
+      || FR_BRAND_TO_INN[query.toLowerCase()]
+      || FR_BRAND_TO_INN[firstWord]   // catches full autocomplete labels
+      || null;
+    // Proxy lookup: use INN if resolved, otherwise brand base name
+    // (proxy searches by product name, so "tobradex" finds "TOBRADEX 3 mg/g…")
+    const lookupTerm   = innFromBrand || firstWord;
+
+    setLoadingMsg(t('loadingStep', 'Identification…'));
+
+    // 3 parallel calls: BDPM proxy, SAM proxy, RxNorm
+    // Include firstWord in searchTerms so RxNorm can find brand-named drugs
+    const searchTerms = [...new Set([query, normalized, firstWord, innFromBrand].filter(Boolean))];
+    const [frR, beR, rxFirst] = await Promise.all([
+      dbReady ? Promise.resolve(localDrugDetailFr(lookupTerm)) : Promise.resolve(null),
+      dbReady ? Promise.resolve(localDrugDetailBe(lookupTerm)) : Promise.resolve(null),
+      (async () => {
+        const results = await Promise.all(
+          searchTerms.map(term => jFetch(`${RXNORM}/rxcui.json?name=${encodeURIComponent(term)}&search=1`))
+        );
+        return results.find(r => r?.idGroup?.rxnormId?.[0]) || null;
+      })()
+    ]);
+
+    const frData = frR?.nom && !frR?.error ? frR : null;
+    const beData = beR?.nom && !beR?.error ? beR : null;
+    const rxcui  = rxFirst?.idGroup?.rxnormId?.[0] || null;
+
+    // Build ingredients array from whichever source found substances
+    const ingredients = [];
+    const substSrc = beData?.substances?.length ? beData.substances : frData?.substances || [];
+
+    if (substSrc.length > 0) {
+      substSrc.forEach((s, idx) => {
+        const inn  = normalizeQuery(s.nom || '');
+        const usan = INN_USAN_MAP[inn] || null;
+        ingredients.push({
+          inn,
+          usan,
+          atc:   null,  // filled after RxClass call
+          rxcui: idx === 0 ? rxcui : null,
+          dose:  s.dosage ? `${s.dosage}${s.unite ? ' ' + s.unite : s.reference ? ' ' + s.reference : ''}`.trim() : null,
+          _source: beData ? 'SAM' : 'BDPM'
+        });
+      });
+    } else if (innFromBrand) {
+      // Multi-ingredient brand name check (e.g. "paracetamol codeine")
+      const parts = innFromBrand.split(' ').filter(p => p.length > 3);
+      parts.forEach((part, idx) => {
+        ingredients.push({ inn: part, usan: INN_USAN_MAP[part] || null, atc: null, rxcui: idx === 0 ? rxcui : null, dose: null, _source: 'lookup' });
+      });
+    } else {
+      ingredients.push({ inn: normalized, usan: INN_USAN_MAP[normalized] || null, atc: null, rxcui, dose: null, _source: 'query' });
+    }
+
+    // Fetch ATC code for primary ingredient via RxClass
+    if (rxcui) {
+      setLoadingMsg(t('loadingStep', 'ATC…'));
+      const atcR = await jFetch(`${RXNORM}/rxclass/class/byRxcui.json?rxcui=${rxcui}&relaSource=ATC`);
+      const atcCodes = (atcR?.rxclassDrugInfoList?.rxclassDrugInfo || [])
+        .map(i => i.rxclassMinConceptItem?.classId).filter(Boolean);
+      if (atcCodes[0] && ingredients[0]) ingredients[0].atc = atcCodes[0];
+      // Also get ATC name for display
+      const atcName = (atcR?.rxclassDrugInfoList?.rxclassDrugInfo || [])
+        .map(i => i.rxclassMinConceptItem?.className).filter(Boolean)[0] || null;
+      ingredients[0]._atcName = atcName || null;
+    }
+
+    // Brand names: FR from lookup table, BE from proxy SAM query, US from OpenFDA later
+    const frBrandsLookup = FR_INN_TO_BRANDS[ingredients[0]?.inn] || [];
+    const beBrandsFromProxy = beData?.brands_be || [];
+    const displayName = beData?.nom
+      ? capFirst(beData.nom.split(' ')[0])
+      : frData?.nom
+        ? capFirst(frData.nom.split(' ')[0])
+        : innFromBrand ? capFirst(innFromBrand.split(' ')[0])
+        : capFirst(query);
+
+    const foundIn = [...(beData ? ['SAM'] : []), ...(frData ? ['BDPM'] : []), ...(rxcui ? ['RxNorm'] : [])];
+
+    return {
+      query,
+      normalized,
+      displayName,
+      ingredients,
+      isCombo:   ingredients.length > 1,
+      brands:    { fr: frBrandsLookup, be: beBrandsFromProxy, us: [] },
+      foundIn,
+      innConflict: null,  // edge case — skip for now
+      _raw: { frData, beData, rxcui }
+    };
+  }
+
+  /* ── Step 2: enrichAll ─────────────────────────────────────── */
+  async function enrichAll(anchor, profile) {
+    setLoadingMsg(t('loadingStep', 'OpenFDA…'));
+
+    let fdaLabel, fdaPerIngredient = null;
+
+    if (anchor.isCombo) {
+      // Run one FDA lookup per ingredient in parallel
+      fdaPerIngredient = await Promise.all(
+        anchor.ingredients.map(ing => enrichClinicalForIngredient(ing))
+      );
+      // Primary label = first ingredient (drives clinical sections)
+      fdaLabel = fdaPerIngredient[0];
+      // Merge DDI text across all ingredients for a richer interaction scan
+      const mergedDDI = fdaPerIngredient
+        .map(l => l?.drug_interactions?.[0] || '').filter(Boolean).join('\n\n');
+      if (mergedDDI) fdaLabel = { ...fdaLabel, _mergedDDIText: mergedDDI };
+    } else {
+      fdaLabel = await enrichClinical(anchor);
+    }
+
+    // Auto-translate FDA content to French if feature is enabled
+    if (autoTranslate && lang === 'fr') {
+      setLoadingMsg(t('loadingStep', t('loadingTranslating')));
+      fdaLabel = await translateFDALabel(fdaLabel);
+      if (fdaPerIngredient) {
+        fdaPerIngredient = await Promise.all(fdaPerIngredient.map(lbl => translateFDALabel(lbl)));
+        // Rebuild merged DDI text from translated labels
+        const mergedDDI = fdaPerIngredient
+          .map(l => l?.drug_interactions?.[0] || '').filter(Boolean).join('\n\n');
+        if (mergedDDI) fdaLabel = { ...fdaLabel, _mergedDDIText: mergedDDI };
+      }
+    }
+
+    const ddi  = enrichDDI(fdaLabel, profile, fdaPerIngredient);
+    const food = enrichFood(anchor);
+
+    setLoadingMsg(t('loadingStep', 'Équivalents…'));
+    const equivalents = await enrichEquivalents(anchor);
+
+    return { fdaLabel, fdaPerIngredient, ddi, food, equivalents };
+  }
+
+  async function enrichClinical(anchor) {
+    // Build search terms: INN + USAN for every ingredient + display name
+    const terms = [];
+    for (const ing of anchor.ingredients) {
+      if (ing.inn)  terms.push(ing.inn);
+      if (ing.usan) terms.push(ing.usan);
+    }
+    terms.push(anchor.normalized);
+    const unique = [...new Set(terms.filter(Boolean))];
+
+    // Try each term sequentially, return first FDA hit
+    for (const term of unique) {
+      const url = `${OPENFDA}/label.json?search=openfda.generic_name:"${encodeURIComponent(term)}"&limit=1`;
+      const r = await jFetch(url);
+      if (r?.results?.[0]) return { ...r.results[0], _provenance: 'OpenFDA', _term: term };
+    }
+
+    // Fallback: brand name search
+    const brandUrl = `${OPENFDA}/label.json?search=openfda.brand_name:"${encodeURIComponent(anchor.displayName)}"&limit=1`;
+    const r2 = await jFetch(brandUrl);
+    if (r2?.results?.[0]) return { ...r2.results[0], _provenance: 'OpenFDA', _term: anchor.displayName };
+
+    return { _provenance: 'OpenFDA', _notFound: true };
+  }
+
+  /* ── Per-ingredient FDA lookup (for combo drugs) ───────────── */
+  async function enrichClinicalForIngredient(ing) {
+    const terms = [...new Set([ing.inn, ing.usan].filter(Boolean))];
+    for (const term of terms) {
+      const url = `${OPENFDA}/label.json?search=openfda.generic_name:"${encodeURIComponent(term)}"&limit=1`;
+      const r = await jFetch(url);
+      if (r?.results?.[0]) return { ...r.results[0], _provenance: 'OpenFDA', _term: term, _ingredient: ing.inn };
+    }
+    return { _provenance: 'OpenFDA', _notFound: true, _ingredient: ing.inn };
+  }
+
+  function enrichDDI(fdaLabel, profile, fdaPerIngredient = null) {
+    // For combos, prefer the merged DDI text that covers all ingredients
+    const rawText = fdaLabel?._mergedDDIText || fdaLabel?.drug_interactions?.[0] || '';
+
+    if (!rawText && fdaLabel?._notFound) return { interactions: [], _provenance: 'OpenFDA', _noLabel: true };
+    if (!rawText) return { interactions: [], rawText: '', _provenance: 'OpenFDA', _noData: true };
+    if (!profile?.medications?.length) return { interactions: [], rawText, _provenance: 'OpenFDA', _noMeds: true };
+
+    // Scan DDI text for mentions of profile medications (INN + USAN)
+    const found = [];
+    const textLower = rawText.toLowerCase();
+    for (const med of profile.medications) {
+      const names = resolveAllNames(med);
+      for (const name of names) {
+        if (textLower.includes(name)) {
+          found.push({ med, matchedName: name });
+          break;
+        }
+      }
+    }
+    return { interactions: found, rawText: trunc(rawText, 600), _provenance: 'OpenFDA' };
+  }
+
+  function enrichFood(anchor) {
+    const matches = matchFoodInteractions(anchor);
+    return { matches, _provenance: 'Table interne' };
+  }
+
+  /* ── enrichEquivalents: pure-equivalent brand lookup ───────────
+     Interroge les deux bases locales via sql.js (localBrandsBe / localBrandsFr).
+     Returns { be: {groups, total} | null, fr: {groups, total} | null }
+     Substance passée = valeur exacte issue de la base (préserve accents / casse). */
+  async function enrichEquivalents(anchor) {
+    if (!dbReady) return { be: null, fr: null, _noProxy: true };
+
+    // Use exact substance name as returned by the DB (preserves accents / case)
+    const beSubst = anchor._raw?.beData?.substances?.[0]?.nom || anchor.inn || '';
+    const frSubst = anchor._raw?.frData?.substances?.[0]?.nom || anchor.inn || '';
+
+    const beRes = beSubst ? localBrandsBe(beSubst) : null;
+    const frRes = frSubst ? localBrandsFr(frSubst) : null;
+
+    return { be: beRes, fr: frRes };
+  }
+
+  function matchFoodInteractions(anchor) {
+    const results = [];
+    for (const rule of FOOD_INTERACTIONS.rules) {
+      for (const ing of anchor.ingredients) {
+        if (!ing.atc) continue;
+        const matched = rule.match.atc_prefix.some(prefix => ing.atc.startsWith(prefix));
+        if (matched) {
+          // Avoid duplicate rule entries for multi-ingredient combo
+          if (!results.find(r => r.rule.id === rule.id)) {
+            results.push({ rule, ingredient: ing.inn });
+          }
+        }
+      }
+    }
+    return results;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PART 4 — searchDrug · renderResultsV2 · Init
+  ═══════════════════════════════════════════════════════════════ */
+
+  /* ── searchDrug: entry point ───────────────────────────────── */
+  async function searchDrug() {
+    const query = document.getElementById('drug-input').value.trim();
+    if (!query) { alert(t('errNoDrug')); return; }
+
+    acClose();
+    document.getElementById('breadcrumb-drug').textContent = query;
+    switchView('results');
+    showLoading(t('loading'));
+    document.getElementById('btn-search').disabled = true;
+    document.getElementById('results-content').style.display  = 'none';
+    document.getElementById('prov-control').style.display = 'none';
+
+    try {
+      const acItem   = _acSelectedItem; // capture before any async
+      _acSelectedItem = null;           // clear for next search
+      const profile  = activeProfile !== null ? profiles[activeProfile] : null;
+      const anchor   = await resolveAnchor(query);
+      if (acItem) {
+        anchor._fromAC   = true;
+        anchor._acLabel  = acItem.name;
+        anchor._acSource = acItem.source;
+      }
+
+      if (!anchor.foundIn.length && !anchor._raw.rxcui) {
+        throw t('errNotFound');
+      }
+
+      const enriched = await enrichAll(anchor, profile);
+      hideLoading();
+      renderResultsV2(anchor, enriched, profile);
+      document.getElementById('breadcrumb-drug').textContent = anchor.displayName;
+      addRecentCheck(anchor, enriched, profile);
+    } catch (e) {
+      hideLoading();
+      renderError(typeof e === 'string' ? e : (e.message || t('errSearch')));
+      document.getElementById('results-content').style.display = 'block';
+    } finally {
+      document.getElementById('btn-search').disabled = false;
+    }
+  }
+
+  /* ── renderResultsV2 ───────────────────────────────────────── */
+  function renderResultsV2(anchor, enriched, profile) {
+    const { fdaLabel, ddi, food, equivalents } = enriched;
+    const { frData, beData }      = anchor._raw;
+    const fda = f => fdaLabel?.[f]?.[0] || null;
+
+    // Allergy check — only when a profile is active
+    let allergyHit = null;
+    let allergyHitIngredient = null; // which ingredient triggered (for combo display)
+
+    if (profile) {
+      if (anchor.isCombo && enriched.fdaPerIngredient) {
+        for (let i = 0; i < anchor.ingredients.length; i++) {
+          const ing = anchor.ingredients[i];
+          const ingFda = enriched.fdaPerIngredient[i];
+          const ingTargets = [
+            ing.inn, ing.usan,
+            ...(beData?.substances?.[i] ? [beData.substances[i].nom] : []),
+            ...(frData?.substances?.[i] ? [frData.substances[i].nom] : []),
+          ].filter(Boolean);
+          const hit = findAllergyConflict(profile.allergies || [], ingTargets, ingFda?._notFound ? null : ingFda);
+          if (hit) { allergyHit = hit; allergyHitIngredient = ing.inn; break; }
+        }
+      } else {
+        const allergyTargets = [
+          anchor.displayName, anchor.query, anchor.normalized,
+          ...anchor.ingredients.map(i => i.inn),
+          ...anchor.ingredients.map(i => i.usan).filter(Boolean),
+          ...anchor.brands.fr,
+          ...(beData?.substances?.map(s => s.nom) || []),
+          ...(frData?.substances?.map(s => s.nom) || []),
+        ].filter(Boolean);
+        allergyHit = findAllergyConflict(profile.allergies || [], allergyTargets, fdaLabel?._notFound ? null : fdaLabel);
+      }
+    }
+
+    // Build primary ingredient display name (DCI row)
+    const ing0  = anchor.ingredients[0];
+    const dual  = ing0 ? getDualName(ing0.inn) : null;
+    const dciDisplay = anchor.isCombo
+      ? anchor.ingredients.map(i => {
+          const d = getDualName(i.inn);
+          return d ? `${d.inn} <span class="muted">(INN) / ${d.usan} (USAN)</span>` : esc(i.inn);
+        }).join(' <strong>+</strong> ')
+      : dual
+        ? `${dual.inn} <span class="muted">(INN)</span> / ${dual.usan} <span class="muted">(USAN)</span>`
+        : esc(ing0?.inn || anchor.normalized);
+
+    // Brand names display
+    const allBrands = [...new Set([...anchor.brands.fr, ...(fdaLabel?.openfda?.brand_name || []).slice(0, 3)])];
+
+    // Subtitle (form + route from proxy)
+    const formLine = [beData?.forme || frData?.forme, beData?.voie || frData?.voies].filter(Boolean).join(' — ');
+
+    /* ── Alert banner ── */
+    const allergyIngNote = allergyHitIngredient
+      ? (lang === 'fr' ? ` (substance : <strong>${esc(allergyHitIngredient)}</strong>)` : ` (substance: <strong>${esc(allergyHitIngredient)}</strong>)`)
+      : '';
+    const alertHtml = (profile && allergyHit)
+      ? `<div class="alert-banner">🚨 <div><strong>${t('alertTitle', profile.name)}</strong>${allergyIngNote}<br><span style="font-size:13px;">${t('alertBody', anchor.displayName)}</span></div></div>`
+      : '';
+
+    /* ── Card head ── */
+    // Build head detail rows (Forme / DCI / USAN / query context)
+    const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-400);width:90px;flex-shrink:0;';
+    const valStyle   = 'font-size:13px;color:var(--text-700);';
+    const noteStyle  = 'font-size:11px;color:var(--text-400);';
+    const rowStyle   = 'display:flex;gap:8px;align-items:baseline;';
+
+    const headRows = [];
+    if (formLine) {
+      headRows.push(`<div style="${rowStyle}"><span style="${labelStyle}">${lang === 'fr' ? 'Forme' : 'Form'}</span><span style="${valStyle}">${esc(formLine)}</span></div>`);
+    }
+    // DCI / USAN rows
+    if (anchor.isCombo) {
+      const dciText  = anchor.ingredients.map(i => i.inn).join(' + ');
+      const usanText = anchor.ingredients.map(i => i.usan).filter(Boolean).join(' + ');
+      headRows.push(`<div style="${rowStyle}"><span style="${labelStyle}">DCI</span><span style="${valStyle}">${esc(dciText)} <span style="${noteStyle}">— ${lang === 'fr' ? 'Dénomination Commune Internationale' : 'International Nonproprietary Name'}</span></span></div>`);
+      if (usanText) headRows.push(`<div style="${rowStyle}"><span style="${labelStyle}">USAN</span><span style="${valStyle}">${esc(usanText)} <span style="${noteStyle}">— ${lang === 'fr' ? 'Nom américain adopté' : 'US Adopted Name'}</span></span></div>`);
+    } else {
+      if (ing0?.inn)  headRows.push(`<div style="${rowStyle}"><span style="${labelStyle}">DCI</span><span style="${valStyle}">${esc(ing0.inn)} <span style="${noteStyle}">— ${lang === 'fr' ? 'Dénomination Commune Internationale' : 'International Nonproprietary Name'}</span></span></div>`);
+      if (ing0?.usan) headRows.push(`<div style="${rowStyle}"><span style="${labelStyle}">USAN</span><span style="${valStyle}">${esc(ing0.usan)} <span style="${noteStyle}">— ${lang === 'fr' ? 'Nom américain adopté' : 'US Adopted Name'}</span></span></div>`);
+    }
+    // Query context row — shown at bottom
+    if (anchor._fromAC) {
+      // User selected a proposition from autocomplete — show the full proposition label
+      const srcBadge = anchor._acSource ? `<span class="prov ${anchor._acSource === 'BE' ? 'be' : 'fr'}" style="margin-left:6px;font-size:9px;">${esc(anchor._acSource)}</span>` : '';
+      headRows.push(`<div style="${rowStyle}"><span style="${labelStyle}">${lang === 'fr' ? 'Sélectionné' : 'Selected'}</span><span style="${valStyle}">${esc(anchor._acLabel)}${srcBadge}</span></div>`);
+    } else if (normalizeQuery(anchor.query || '') !== normalizeQuery(anchor.displayName || '')) {
+      // User typed something different from displayName (e.g. 'DAFALGAN' → 'Dafalgan')
+      headRows.push(`<div style="${rowStyle}"><span style="${labelStyle}">${lang === 'fr' ? 'Recherché' : 'Searched'}</span><span style="${valStyle}">${esc(anchor.query)}</span></div>`);
+    }
+
+    const headHtml = `
+      <div class="card-head">
+        ${profile ? `<div class="profile-chip profile-chip-abs">${emoji(profile)} ${esc(profile.name)} · ${catLabel(profile)}</div>` : ''}
+        <div class="drug-title">
+          ${esc(anchor.displayName)}
+          ${anchor.isCombo ? `<span class="combo-tag">COMBO</span>` : ''}
+        </div>
+        ${headRows.length ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px;">${headRows.join('')}</div>` : ''}
+      </div>`;
+
+    /* identityHtml removed — replaced by headHtml list rows */
+
+    /* ── Zone A: clinical sections ── */
+    const tx = !!fdaLabel?._translated; // true when auto-translated
+    const clinSections = [
+      buildSection('💊', t('secIndication'),        fda('indications_and_usage') || fda('purpose'),          'us', '',        tx),
+      buildSection('📋', t('secDosage'),             fda('dosage_and_administration'),                        'us', '',        tx),
+      buildSection('⚠️', t('secSideEffects'),        fda('adverse_reactions') || fda('warnings_and_cautions'),'us', fda('adverse_reactions') ? 'warning' : '', tx),
+      buildSection('🚫', t('secContraindications'), fda('contraindications'),                                'us', '',        tx),
+    ];
+
+    /* ── Zone A: safety sections ── */
+    const allergyIngSuffix = allergyHitIngredient
+      ? ` <span style="font-size:11px;font-weight:600;color:var(--text-500);">[${esc(allergyHitIngredient)}]</span>`
+      : '';
+    const allergyContent = allergyHit
+      ? `<div class="ing-warn"><span class="sev">${lang === 'fr' ? 'ALLERGIE' : 'ALLERGY'}</span>${t('allergyConflict', allergyHit)}${allergyIngSuffix}</div>`
+      : profile
+        ? `<span class="section-empty">${t('allergyOK', profile.allergies || [])}</span>`
+        : `<span class="section-empty">${t('allergyNoProfile')}</span>`;
+    const allergySection = `
+      <div class="section${allergyHit ? ' danger' : ''}">
+        <div class="section-icon">🔴</div>
+        <div class="section-body">
+          <div class="section-head">
+            <div class="section-title">${t('secAllergies')}</div>
+            <span class="prov us">RxClass</span>
+          </div>
+          <div class="section-content">${allergyContent}</div>
+        </div>
+      </div>`;
+
+    let ddiContent;
+    if (!profile) {
+      ddiContent = `<span class="section-empty">${t('ddiNoProfile')}</span>`;
+    } else if (ddi._noMeds) {
+      ddiContent = `<span class="section-empty">${t('ddiNone')}</span>`;
+    } else if (ddi.interactions?.length > 0) {
+      const medList = ddi.interactions.map(i => `<div class="ing-warn moderate"><span class="sev">${lang === 'fr' ? 'DDI' : 'DDI'}</span>${esc(i.med)}</div>`).join('');
+      ddiContent = medList + `<p style="font-size:12px;color:var(--text-500);margin-top:6px;">⚕️ ${t('ddiDisclaimer')}</p>`;
+      if (ddi.rawText) ddiContent += `<details style="margin-top:8px;font-size:12px;color:var(--text-700);"><summary style="cursor:pointer;color:var(--blue);">${lang === 'fr' ? 'Texte FDA complet' : 'Full FDA text'}</summary><p style="margin-top:6px;line-height:1.6;">${esc(ddi.rawText)}</p></details>`;
+    } else if (ddi._noData || ddi._noLabel) {
+      ddiContent = `<span class="section-empty">${t('noDataFDA')}</span><p style="font-size:12px;color:var(--text-500);margin-top:4px;">⚕️ ${t('ddiDisclaimer')}</p>`;
+    } else {
+      ddiContent = `<span class="section-empty">${t('ddiOK', profile.medications || [])}</span><p style="font-size:12px;color:var(--text-500);margin-top:4px;">⚕️ ${t('ddiDisclaimer')}</p>`;
+    }
+    const ddiSection = `
+      <div class="section${ddi.interactions?.length > 0 ? ' warning' : ''}">
+        <div class="section-icon">💊</div>
+        <div class="section-body">
+          <div class="section-head">
+            <div class="section-title">${t('secDDI')}</div>
+            <span class="prov us">OpenFDA</span>
+          </div>
+          <div class="section-content">${ddiContent}</div>
+        </div>
+      </div>`;
+
+    const foodMatches = food.matches || [];
+    const foodContent = foodMatches.length > 0
+      ? foodMatches.map(m => `
+          <div class="ing-warn${m.rule.severity === 'moderate' ? ' moderate' : ''}">
+            <span class="sev">${m.rule.severity === 'major' ? (lang === 'fr' ? 'MAJEUR' : 'MAJOR') : (lang === 'fr' ? 'MODÉRÉ' : 'MODERATE')}</span>
+            <strong>${m.rule.food[lang]}</strong> — ${esc(m.rule.mechanism)}
+            <div style="font-size:12px;color:var(--text-500);margin-top:3px;">💡 ${esc(m.rule.advice[lang])}</div>
+          </div>`).join('')
+      : `<span class="section-empty">${t('foodNone')}</span>`;
+    const foodSection = `
+      <div class="section${foodMatches.length > 0 ? ' warning' : ''}">
+        <div class="section-icon">🍊</div>
+        <div class="section-body">
+          <div class="section-head">
+            <div class="section-title">${t('secFood')}</div>
+            <span class="prov curated">Table interne</span>
+          </div>
+          <div class="section-content">${foodContent}</div>
+        </div>
+      </div>`;
+
+    /* ── Zone A: combo per-ingredient breakdown (only for combos) ── */
+    const comboBreakdownSection = anchor.isCombo && enriched.fdaPerIngredient
+      ? buildComboBreakdown(anchor, enriched.fdaPerIngredient)
+      : '';
+
+    /* ── Zone A: special populations (conditional, most-restrictive for combos) ── */
+    const specSections = [];
+
+    // Helper: collect a field from all per-ingredient labels, return most informative text
+    const comboSpecText = (fields) => {
+      if (!anchor.isCombo || !enriched.fdaPerIngredient) return null;
+      const hits = [];
+      enriched.fdaPerIngredient.forEach((lbl, i) => {
+        const ing = anchor.ingredients[i];
+        for (const f of fields) {
+          const txt = lbl?.[f]?.[0];
+          if (txt) { hits.push(`[${ing.inn}] ${txt}`); break; }
+        }
+      });
+      return hits.length ? hits.join('\n\n') : null;
+    };
+
+    if (profile?.pregnant) {
+      const txt = comboSpecText(['pregnancy', 'pregnancy_or_breast_feeding'])
+        || fda('pregnancy') || fda('pregnancy_or_breast_feeding') || t('pregnancyDefault');
+      specSections.push(buildSection('🤰', t('secPregnancy'), txt, 'us', '', tx));
+    }
+    if (profile?.category === 'child') {
+      const txt = comboSpecText(['pediatric_use'])
+        || fda('pediatric_use') || t('pediatricDefault', profile.age || '?', profile.weight || '?');
+      specSections.push(buildSection('👶', t('secPediatric'), txt, 'us', 'warning', tx));
+    }
+    if (profile?.category === 'elderly') {
+      const txt = comboSpecText(['geriatric_use'])
+        || fda('geriatric_use') || t('elderlyDefault');
+      specSections.push(buildSection('👴', t('secElderly'), txt, 'us', 'warning', tx));
+    }
+
+    /* ── Zone B: jurisdiction panels (kept for regulatory details) ── */
+    const bePanel = buildJuriPanel('BE', beData, anchor);
+    const frPanel = buildJuriPanel('FR', frData, anchor);
+
+    /* ── Zone C: commercial equivalents ── */
+    const equivSection = buildEquivalentsSection(anchor, equivalents);
+
+    /* ── Sources line ── */
+    const sourceParts = [];
+    if (anchor.foundIn.includes('SAM'))    sourceParts.push('<span class="prov be">SAM</span>');
+    if (anchor.foundIn.includes('BDPM'))   sourceParts.push('<span class="prov fr">BDPM</span>');
+    if (anchor.foundIn.includes('RxNorm')) sourceParts.push('<span class="prov us">RxNorm</span>');
+    if (!fdaLabel?._notFound)              sourceParts.push('<span class="prov us">OpenFDA</span>');
+    if (ing0?.atc)                         sourceParts.push('<span class="prov us">RxClass</span>');
+    if (food.matches?.length)              sourceParts.push('<span class="prov curated">Table interne</span>');
+
+    /* ── Assemble — 3-tab layout ── */
+    const cardId = 'card-' + Date.now();
+    const safetySubLabel = `<div style="padding:8px 28px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-400);border-top:1px solid var(--border-lt);">${profile ? t('zoneSafety') : t('zoneSafetyGeneric')}</div>`;
+    const specSubLabel   = specSections.length ? `<div style="padding:8px 28px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-400);border-top:1px solid var(--border-lt);">${t('zoneSpecialPops')}</div>` : '';
+
+    const html = `
+      <div class="card" id="${cardId}">
+        ${alertHtml}
+        ${headHtml}
+
+        <!-- Tab bar -->
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="molecule" onclick="switchCardTab('${cardId}','molecule')">${t('tabMolecule')}</button>
+          <button class="tab-btn" data-tab="juridiction" onclick="switchCardTab('${cardId}','juridiction')">${t('tabJuridiction')}</button>
+          <button class="tab-btn" data-tab="commercial" onclick="switchCardTab('${cardId}','commercial')">${t('tabCommercial')}</button>
+        </div>
+
+        <!-- Tab 1 — Molécule -->
+        <div class="tab-panel active" data-tab="molecule">
+          ${clinSections.join('')}
+          ${comboBreakdownSection}
+          ${safetySubLabel}
+          ${allergySection}
+          ${ddiSection}
+          ${foodSection}
+          ${specSections.length ? specSubLabel + specSections.join('') : ''}
+        </div>
+
+        <!-- Tab 2 — Juridiction -->
+        <div class="tab-panel" data-tab="juridiction">
+          <div class="juri-tab-panels">
+            ${bePanel}
+            ${frPanel}
+          </div>
+        </div>
+
+        <!-- Tab 3 — Noms commerciaux -->
+        <div class="tab-panel" data-tab="commercial">
+          ${equivSection}
+        </div>
+
+        <div class="card-foot">
+          <span>${t('sourcesLabel')} ${sourceParts.join(' ')}</span>
+          <button class="pdf-btn" onclick="exportPDF()">⬇️ PDF</button>
+        </div>
+        <div class="card-disclaimer">${t('disclaimerText')}</div>
+      </div>`;
+
+    const container = document.getElementById('results-content');
+    container.innerHTML = html;
+    container.style.display = 'block';
+
+    // Wire accordion
+    container.querySelectorAll('.juri-head').forEach(head => {
+      head.addEventListener('click', () => head.closest('.juri').classList.toggle('open'));
+    });
+
+    // Show prov toggle
+    document.getElementById('prov-control').style.display = 'flex';
+  }
+
+  /* ── Helper: build a flat section row ─────────────────────── */
+  function buildSection(icon, title, content, provClass, stateCls = '', translated = false) {
+    const empty   = !content;
+    const bodyHtml = empty
+      ? `<span class="section-empty">${t('noDataFDA')}</span>`
+      : `<div class="section-content">${esc(trunc(content, 500))}</div>`;
+    const provLabel = provClass === 'us' ? 'OpenFDA' : provClass === 'fr' ? 'BDPM' : 'SAM';
+    const txBadge   = translated
+      ? `<span class="prov" style="background:var(--blue-lt);color:var(--blue-mid);margin-left:4px;" title="${t('translateNote')}">🌐 FR</span>`
+      : '';
+    return `
+      <div class="section${stateCls ? ' ' + stateCls : ''}">
+        <div class="section-icon">${icon}</div>
+        <div class="section-body">
+          <div class="section-head">
+            <div class="section-title">${title}</div>
+            <span class="prov ${provClass}">${provLabel}</span>${txBadge}
+          </div>
+          ${bodyHtml}
+        </div>
+      </div>`;
+  }
+
+  /* ── Helper: combo per-ingredient breakdown ────────────────── */
+  function buildComboBreakdown(anchor, fdaPerIngredient) {
+    const items = anchor.ingredients.map((ing, i) => {
+      const lbl  = fdaPerIngredient[i];
+      const fda  = f => lbl?.[f]?.[0] || null;
+      const found = !lbl?._notFound;
+      return `
+        <details style="margin-bottom:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+          <summary style="cursor:pointer;font-weight:700;font-size:13px;padding:9px 14px;background:var(--bg);display:flex;align-items:center;gap:8px;list-style:none;">
+            🔬 ${esc(ing.inn.toUpperCase())}
+            ${ing.dose ? `<span style="font-weight:400;color:var(--text-500);font-size:12px;">${esc(ing.dose)}</span>` : ''}
+            ${!found ? `<span class="badge badge-gray" style="margin-left:auto;">FDA absent</span>` : `<span class="badge badge-blue" style="margin-left:auto;">FDA ✓</span>`}
+          </summary>
+          <div style="padding:10px 14px;font-size:12px;color:var(--text-700);line-height:1.6;">
+            ${found ? `
+              ${fda('indications_and_usage') ? `<p style="margin:0 0 6px;"><strong>${t('secIndication')} :</strong> ${esc(trunc(fda('indications_and_usage'), 280))}</p>` : ''}
+              ${fda('dosage_and_administration') ? `<p style="margin:0 0 6px;"><strong>${t('secDosage')} :</strong> ${esc(trunc(fda('dosage_and_administration'), 280))}</p>` : ''}
+              ${fda('adverse_reactions') ? `<p style="margin:0 0 6px;"><strong>${t('secSideEffects')} :</strong> ${esc(trunc(fda('adverse_reactions'), 280))}</p>` : ''}
+              ${fda('contraindications') ? `<p style="margin:0;"><strong>${t('secContraindications')} :</strong> ${esc(trunc(fda('contraindications'), 200))}</p>` : ''}
+              ${!fda('indications_and_usage') && !fda('adverse_reactions') ? `<p style="color:var(--text-400);">${t('noDataFDA')}</p>` : ''}
+            ` : `<p style="color:var(--text-400);">${t('noDataFDA')}</p>`}
+          </div>
+        </details>`;
+    }).join('');
+
+    return `
+      <div class="section">
+        <div class="section-icon">💊</div>
+        <div class="section-body">
+          <div class="section-head">
+            <div class="section-title">${t('comboBreakdown')}</div>
+            <span class="prov us">OpenFDA</span>
+          </div>
+          <div class="section-content">${items}</div>
+        </div>
+      </div>`;
+  }
+
+  /* ── Helper: build jurisdiction accordion panel ────────────── */
+  function buildJuriPanel(country, data, anchor) {
+    const isBE   = country === 'BE';
+    const flag   = isBE ? '🇧🇪' : '🇫🇷';
+    const label  = isBE ? 'Belgique' : 'France';
+    const prov   = isBE ? 'be' : 'fr';
+    const provTxt= isBE ? 'SAM' : 'BDPM';
+    const open   = isBE;   // BE open by default, FR closed
+
+    // No proxy available
+    if (!dbReady) {
+      return `
+        <div class="juri${open ? ' open' : ''}">
+          <div class="juri-head">${flag} ${label} <span class="prov ${prov}">${provTxt}</span></div>
+          <div class="juri-body juri-unavailable-body">${t('juriNoProxy')}</div>
+        </div>`;
+    }
+
+    // No data from this country
+    if (!data) {
+      return `
+        <div class="juri${open ? ' open unavailable' : ' unavailable'}">
+          <div class="juri-head">${flag} ${label} <span class="prov ${prov}">${provTxt}</span></div>
+          <div class="juri-body">${t('juriUnavailable', label)}</div>
+        </div>`;
+    }
+
+    // 9-row common schema
+    const ing0 = anchor.ingredients[0];
+    const substDisplay = data.substances?.length
+      ? data.substances.map(s => `${s.nom || ''}${s.dosage ? ' ' + s.dosage : ''}${s.unite ? ' ' + s.unite : ''}`).join(', ')
+      : (ing0?.inn ? `${ing0.inn}${ing0.dose ? ' ' + ing0.dose : ''}` : '—');
+
+    // Price + reimbursement from presentations
+    const pres = data.presentations || [];
+    const priceDisplay = pres.slice(0, 2).map(p => {
+      const label = p.conditionnement || p.libelle || '';
+      const prix  = p.prix != null ? p.prix + ' €' : null;
+      const remb  = isBE
+        ? (p.remboursable ? (lang === 'fr' ? 'Remboursable' : 'Reimbursable') : (lang === 'fr' ? 'Non remboursé' : 'Not reimbursed'))
+        : (p.remboursement || '');
+      return [label, prix, remb].filter(Boolean).join(' · ');
+    }).join('<br>') || '—';
+
+    const rembDisplay = isBE
+      ? (pres[0]?.remboursable ? (lang === 'fr' ? 'Oui' : 'Yes') : (lang === 'fr' ? 'Non' : 'No'))
+      : (pres[0]?.remboursement || '—');
+
+    const genericsDisplay = isBE ? '—' : (data.generique || '—');
+    const alerteDisplay   = data.alerte
+      ? `<span style="color:var(--red);">⚠ ${esc(trunc(data.alerte, 160))}</span>`
+      : (lang === 'fr' ? 'Aucune' : 'None');
+
+    // Dispensing status
+    let statutDisplay;
+    if (isBE) {
+      statutDisplay = data.type === 'HOMEOPATHIC'
+        ? (lang === 'fr' ? 'Médicament homéopathique' : 'Homeopathic medicine')
+        : (lang === 'fr' ? 'Médicament allopathique' : 'Allopathic medicine');
+    } else {
+      // FR: prescription_delivrance conditions; empty = OTC (no prescription required)
+      statutDisplay = data.conditions?.length
+        ? esc(data.conditions[0])
+        : (lang === 'fr' ? 'Médicament conseil — sans ordonnance' : 'OTC — no prescription required');
+    }
+
+    const row = (label, value) =>
+      `<div class="id-row"><div class="id-label">${label}</div><div class="id-value">${value || '—'}</div></div>`;
+
+    const commonBlock = `
+      ${row(t('juriPrincipe'),  esc(substDisplay))}
+      ${row(t('juriForme'),     esc(data.forme || '—'))}
+      ${row(t('juriVoie'),      esc(isBE ? data.voie : data.voies) || '—')}
+      ${row(t('juriFormes'),    pres.length ? pres.slice(0, 3).map(p => esc(p.conditionnement || p.libelle || '')).filter(Boolean).join(', ') : '—')}
+      ${row(t('juriStatut'),    statutDisplay)}
+      ${row(t('juriPrix'),      priceDisplay)}
+      ${row(t('juriRemb'),      rembDisplay)}
+      ${row(t('juriGen'),       genericsDisplay)}
+      ${row(t('juriAlertes'),   alerteDisplay)}`;
+
+    let specificBlock = '';
+    if (!isBE && (data.smr || data.asmr)) {
+      specificBlock = `
+        <div class="juri-specific">${t('specifiqueFR')}</div>
+        ${data.smr  ? row(t('juriSMR'),  esc(`${data.smr.valeur || ''}${data.smr.libelle ? ' — ' + trunc(data.smr.libelle, 120) : ''}`)) : ''}
+        ${data.asmr ? row(t('juriASMR'), esc(`${data.asmr.valeur || ''}${data.asmr.libelle ? ' — ' + trunc(data.asmr.libelle, 120) : ''}`)) : ''}`;
+    } else if (isBE && pres.length) {
+      const categList = [...new Set(pres.map(p => p.categorie_remboursement).filter(Boolean))];
+      specificBlock = `
+        <div class="juri-specific">${t('specifiqueBE')}</div>
+        ${row(t('juriCategRemb'), categList.length ? esc(categList.join(', ')) : '—')}`;
+    }
+
+    return `
+      <div class="juri${open ? ' open' : ''}">
+        <div class="juri-head">${flag} ${label} <span class="prov ${prov}">${provTxt}</span></div>
+        <div class="juri-body">
+          ${commonBlock}
+          ${specificBlock}
+        </div>
+      </div>`;
+  }
+
+  /* ── Card tab switch ──────────────────────────────────────── */
+  function switchCardTab(cardId, tab) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    card.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    card.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.dataset.tab === tab);
+    });
+  }
+
+  /* ── Tab switch for equivalents section ───────────────────── */
+  function switchEquivTab(wrapId, country) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    wrap.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.country === country);
+    });
+    wrap.querySelectorAll('.equiv-panel').forEach(panel => {
+      panel.style.display = panel.dataset.country === country ? '' : 'none';
+    });
+  }
+
+  /* ── Build Option C equivalents section ────────────────────── */
+  function buildEquivalentsSection(anchor, equivalents) {
+    const wrapId = 'equiv-section-' + Date.now();
+
+    // Proxy unavailable
+    if (!dbReady || equivalents?._noProxy) {
+      return `<div class="equiv-unavail" style="padding:24px 20px;">${t('equivLoadErr')}</div>`;
+    }
+
+    const beData = equivalents?.be;
+    const frData = equivalents?.fr;
+    const beCount = beData?.total || 0;
+    const frCount = frData?.total || 0;
+
+    /* Regroup proxy brand-level groups → company-level accordion groups.
+       Generics: brand name contains INN substring (≥4 chars), compared after
+       NFD normalization (accent-safe via normalizeQuery).
+       Generics go first (open); other companies go after (closed). */
+    function regroupByCompany(data, innSubst, innClean) {
+      if (!data || !data.groups?.length) return null;
+      // Use the cleanest INN form available: anchor.inn (RxNorm) preferred over DB substance
+      const substNorm = normalizeQuery(innClean || innSubst || '').replace(/\s.*/, ''); // first word only
+      const subst     = substNorm.slice(0, 9); // first 9 chars of INN, accent-stripped
+      const isGeneric = brand => subst.length >= 4 && normalizeQuery(brand || '').includes(subst);
+
+      const genericMap = {};  // key: company → variants[] (generic brands, grouped by titulaire)
+      const companyMap = {};  // key: company → variants[] (originators)
+
+      data.groups.forEach(group => {
+        const brand   = group.brand || '';
+        const company = group.company || (lang === 'fr' ? 'Autre' : 'Other');
+        const target  = isGeneric(brand) ? genericMap : companyMap;
+        if (!target[company]) target[company] = [];
+        group.variants.forEach(v => target[company].push({ ...v, _brand: brand, _company: company }));
+      });
+
+      const genericGroups = Object.entries(genericMap).map(([name, variants]) => ({ name, variants }));
+      const companyGroups = Object.entries(companyMap).map(([name, variants]) => ({ name, variants }));
+      return { genericGroups, companyGroups };
+    }
+
+    function buildVariantProdRow(v, country) {
+      const priceStr = v.price != null
+        ? `<span class="prod-price">€ ${parseFloat(v.price).toFixed(2).replace('.', ',')}</span>`
+        : `<span class="prod-price na">—</span>`;
+
+      let rembCls, rembText;
+      if (country === 'be') {
+        rembCls  = v.reimbursable ? 'yes' : 'no';
+        rembText = v.reimbursable ? (lang === 'fr' ? 'Remboursé' : 'Reimbursed') : (lang === 'fr' ? 'Non remboursé' : 'Not reimbursed');
+      } else {
+        rembCls  = v.reimbursement ? 'yes' : 'no';
+        rembText = v.reimbursement ? esc(v.reimbursement) : (lang === 'fr' ? 'Non remboursé' : 'Not reimbursed');
+      }
+
+      const formLine = v.form ? `<div class="prod-form">${esc(v.form)}</div>` : '';
+      return `
+        <div class="prod-row">
+          <div class="prod-left">
+            <div class="prod-name">${esc(v.name)}</div>
+            ${formLine}
+          </div>
+          <div class="prod-right">
+            ${priceStr}
+            <span class="prod-remb ${rembCls}">${rembText}</span>
+          </div>
+        </div>`;
+    }
+
+    function buildAccordions(data, country, innSubst, innClean) {
+      if (!data || !data.groups?.length) {
+        return `<div class="equiv-empty" style="padding:16px 20px;">${t('noEquivalents')}</div>`;
+      }
+      const regrouped = regroupByCompany(data, innSubst, innClean);
+      if (!regrouped) return `<div class="equiv-empty" style="padding:16px 20px;">${t('noEquivalents')}</div>`;
+
+      const { genericGroups, companyGroups } = regrouped;
+      let html = '';
+
+      const sectionLabel = text =>
+        `<div style="padding:14px 20px 6px;font-size:13px;font-weight:700;text-transform:uppercase;
+          letter-spacing:.06em;color:var(--text-700);border-top:2px solid var(--border);">${text}</div>`;
+
+      // Originators — open by default
+      if (companyGroups.length) {
+        html += sectionLabel(lang === 'fr' ? 'Originateurs' : 'Originators');
+        companyGroups.forEach(({ name, variants }) => {
+          const rows = variants.map(v => buildVariantProdRow(v, country)).join('');
+          html += `
+            <details class="lab-accordion">
+              <summary>
+                <div class="lab-name">${esc(name)}</div>
+                <span class="seg-count" style="margin-left:4px;">${variants.length}</span>
+                <span class="lab-chevron">▶</span>
+              </summary>
+              ${rows}
+            </details>`;
+        });
+      }
+
+      // Generics — per titulaire, collapsed by default
+      if (genericGroups.length) {
+        html += sectionLabel(lang === 'fr' ? 'Génériques' : 'Generics');
+        genericGroups.forEach(({ name, variants }) => {
+          const rows = variants.map(v => buildVariantProdRow(v, country)).join('');
+          html += `
+            <details class="lab-accordion">
+              <summary>
+                <div class="lab-name">${esc(name)}</div>
+                <span class="seg-count" style="margin-left:4px;">${variants.length}</span>
+                <span class="lab-chevron">▶</span>
+              </summary>
+              ${rows}
+            </details>`;
+        });
+      }
+
+      return html;
+    }
+
+    const beSubst  = anchor._raw?.beData?.substances?.[0]?.nom || anchor.ingredients[0]?.inn || '';
+    const frSubst  = anchor._raw?.frData?.substances?.[0]?.nom || anchor.ingredients[0]?.inn || '';
+    const innClean = anchor.ingredients[0]?.inn || ''; // RxNorm INN — accent-free, NOT the brand query
+    const beAccordions = buildAccordions(beData, 'be', beSubst, innClean);
+    const frAccordions = buildAccordions(frData, 'fr', frSubst, innClean);
+
+    const srcBE = beData ? '<span class="prov be">SAM</span>' : '';
+    const srcFR = frData ? '<span class="prov fr">BDPM</span>' : '';
+
+    return `
+      <div id="${wrapId}">
+        <div class="comm-wrap">
+          <div class="comm-controls">
+            <div class="seg-control">
+              <button class="seg-btn active" data-country="be"
+                onclick="switchEquivTab('${wrapId}','be')">
+                🇧🇪 Belgique <span class="seg-count">${beCount}</span>
+              </button>
+              <button class="seg-btn" data-country="fr"
+                onclick="switchEquivTab('${wrapId}','fr')">
+                🇫🇷 France <span class="seg-count">${frCount}</span>
+              </button>
+            </div>
+            <span class="comm-note">${t('pureEquivsNote')}</span>
+          </div>
+        </div>
+
+        <div class="equiv-panel" data-country="be">${beAccordions}</div>
+        <div class="equiv-panel" data-country="fr" style="display:none;">${frAccordions}</div>
+
+        <div class="comm-footer">
+          <span class="comm-total">
+            <strong>${beCount}</strong> ${lang === 'fr' ? 'équiv. purs 🇧🇪' : 'pure equiv. 🇧🇪'}
+            &nbsp;·&nbsp;
+            <strong>${frCount}</strong> ${lang === 'fr' ? 'en 🇫🇷' : 'in 🇫🇷'}
+          </span>
+          <span style="font-size:11px;color:var(--text-400);">${srcBE} ${srcFR}</span>
+        </div>
+      </div>`;
+  }
+
+  /* ── Error card ────────────────────────────────────────────── */
+  function renderError(msg) {
+    document.getElementById('results-content').innerHTML = `
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="drug-title" style="color:var(--red-dk);">❌ ${t('errTitle')}</div>
+            <div class="drug-subtitle">${esc(msg)}</div>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('results-content').style.display = 'block';
+  }
+
+  /* ── Recent checks ─────────────────────────────────────────── */
+  function addRecentCheck(anchor, enriched, profile) {
+    const { fdaLabel, ddi }  = enriched;
+    const allergyTargets = [anchor.displayName, anchor.query, ...anchor.ingredients.map(i => i.inn)].filter(Boolean);
+    const allergyHit     = profile ? findAllergyConflict(profile.allergies || [], allergyTargets, fdaLabel?._notFound ? null : fdaLabel) : null;
+    const flag = allergyHit ? 'danger' : ddi.interactions?.length > 0 ? 'warning' : profile?.medications?.length > 0 ? 'none' : 'info';
+    const profileName = profile?.name || (lang === 'fr' ? 'Recherche rapide' : 'Quick lookup');
+    recentChecks.unshift({ displayName: anchor.displayName, profileName, flag, ts: Date.now() });
+    if (recentChecks.length > 5) recentChecks.pop();
+    renderRecentChecks();
+  }
+
+  /* ── PDF export (placeholder) ──────────────────────────────── */
+  function exportPDF() {
+    alert(lang === 'fr' ? 'Export PDF disponible dans la Session 3.' : 'PDF export available in Session 3.');
+  }
+
+  /* ── Init ──────────────────────────────────────────────────── */
+  setLang('fr');
+  renderProfileGrid();
+  renderRecentChecks();
+  switchView('home');
+  initLocalDb(); // async, non-blocking
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+  </script>
+</body>
+</html>

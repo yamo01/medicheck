@@ -1,0 +1,19 @@
+{
+  "name": "MediCheck",
+  "short_name": "MediCheck",
+  "description": "Vérification de sécurité médicamenteuse",
+  "start_url": "medicine-check.html",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "src/logo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

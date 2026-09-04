@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <clipPath id="hex-left">
+      <rect x="0" y="0" width="40" height="80"/>
+    </clipPath>
+    <clipPath id="hex-right">
+      <rect x="40" y="0" width="40" height="80"/>
+    </clipPath>
+  </defs>
+
+  <!-- Hexagon left half — deep forest teal (D1) -->
+  <polygon points="40,6 70,23 70,57 40,74 10,57 10,23" fill="#00695c" clip-path="url(#hex-left)"/>
+
+  <!-- Hexagon right half — blue-teal (D3) -->
+  <polygon points="40,6 70,23 70,57 40,74 10,57 10,23" fill="#00838f" clip-path="url(#hex-right)"/>
+
+  <!-- Inner depth highlight -->
+  <polygon points="40,13 63,26 63,54 40,67 17,54 17,26" fill="white" opacity="0.07"/>
+
+  <!-- Vertical split line -->
+  <line x1="40" y1="6" x2="40" y2="74" stroke="white" stroke-width="1" opacity="0.25"/>
+
+  <!-- Medical cross, white, centered at (40,40) -->
+  <rect x="26" y="37" width="29" height="7" rx="2" fill="white" opacity="0.95"/>
+  <rect x="37" y="26" width="7" height="28" rx="2" fill="white" opacity="0.95"/>
+</svg>
