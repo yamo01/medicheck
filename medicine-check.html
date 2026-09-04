@@ -427,6 +427,8 @@
     .section.danger  .section-title { color: var(--red-dk); }
     .section.warning .section-title { color: var(--amber-dk2); }
     .section-content { font-size: 13px; color: var(--text-700); line-height: 1.6; }
+    .section-content p { margin: 0 0 10px; }
+    .section-content p:last-child { margin-bottom: 0; }
     .section-empty   { color: var(--text-400); font-style: italic; font-size: 13px; }
 
     /* Provenance badge — exact from mockup */
@@ -1568,6 +1570,9 @@
   /* ── Utility functions ─────────────────────────────────────── */
   const esc   = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const trunc = (s, n = 600) => { if (!s) return null; s = s.replace(/\s+/g, ' ').trim(); return s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, '') + '…'; };
+  /* Splits raw OpenFDA text into one <p> per sentence — the source arrives as a single
+     dense block with no line breaks, which is hard to read, especially on mobile. */
+  const paragraphize = s => String(s || '').split(/(?<=[.!?])\s+(?=[A-Z(])/).map(p => `<p>${esc(p.trim())}</p>`).join('');
   const capFirst = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
   async function jFetch(url) {
@@ -2887,7 +2892,7 @@
     const empty   = !content;
     const bodyHtml = empty
       ? `<span class="section-empty">${t('noDataFDA')}</span>`
-      : `<div class="section-content">${esc(trunc(content, 500))}</div>`;
+      : `<div class="section-content">${paragraphize(trunc(content, 500))}</div>`;
     const provLabel = provClass === 'us' ? 'OpenFDA' : provClass === 'fr' ? 'BDPM' : 'SAM';
     const txBadge   = translated
       ? `<span class="prov" style="background:var(--blue-lt);color:var(--blue-mid);margin-left:4px;" title="${t('translateNote')}">🌐 FR</span>`
