@@ -430,6 +430,19 @@
     .section-content p { margin: 0 0 10px; }
     .section-content p:last-child { margin-bottom: 0; }
     .section-empty   { color: var(--text-400); font-style: italic; font-size: 13px; }
+    .withdrawn-tag {
+      display: inline-block; vertical-align: middle; margin-left: 8px;
+      background: var(--amber-lt); color: var(--amber-dk);
+      border: 1px solid var(--amber-border); border-radius: 10px;
+      padding: 2px 9px; font-size: 11px; font-weight: 700;
+      letter-spacing: .3px; white-space: nowrap;
+    }
+    .ansm-link {
+      display: inline-flex; align-items: center; gap: 5px; width: 100%;
+      margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border);
+      font-size: 12px; font-weight: 600; color: var(--blue-mid); text-decoration: none;
+    }
+    .ansm-link:hover { text-decoration: underline; }
 
     /* Provenance badge — exact from mockup */
     .prov {
@@ -892,6 +905,10 @@
       drugLabel:         'Nom du médicament',
       searchPlaceholder: 'Ex: ibuprofène, Doliprane, amoxicilline…',
       searchBtn:         'Vérifier →',
+      ansmLink:          'Voir la fiche officielle ANSM →',
+      withdrawnTag:      'Retiré du marché',
+      withdrawnHint:     'Ce médicament n\u2019est plus commercialisé en France. '
+                         + 'Les informations restent affichées à titre indicatif.',
       searchNote:        'Données locales — aucune information personnelle transmise.',
       recentTitle:       'Vérifications récentes',
       noRecent:          'Aucune vérification pour cette session.',
@@ -1023,6 +1040,10 @@
       drugLabel:         'Medication name',
       searchPlaceholder: 'E.g. ibuprofen, Paracetamol, amoxicillin…',
       searchBtn:         'Check →',
+      ansmLink:          'View the official ANSM record →',
+      withdrawnTag:      'Withdrawn',
+      withdrawnHint:     'This medicine is no longer marketed in France. '
+                         + 'The information is shown for reference only.',
       searchNote:        'Local data — no personal information is transmitted.',
       recentTitle:       'Recent checks',
       noRecent:          'No checks this session.',
@@ -1884,6 +1905,7 @@
       WHERE denomination LIKE ?
         AND etat_commercialisation LIKE '%Commercialis%'
       ORDER BY
+        CASE WHEN etat_commercialisation = 'Commercialisée' THEN 0 ELSE 1 END,
         CASE WHEN LOWER(denomination) LIKE LOWER(?) THEN 0 ELSE 1 END,
         LENGTH(denomination),
         denomination
@@ -1900,6 +1922,10 @@
       WHERE denomination LIKE ?
         AND etat_commercialisation LIKE '%Commercialis%'
       ORDER BY
+        -- Un médicament retiré du marché reste trouvable (il est signalé par un
+        -- badge), mais il ne doit pas être choisi à la place d'un équivalent
+        -- encore commercialisé.
+        CASE WHEN etat_commercialisation = 'Commercialisée' THEN 0 ELSE 1 END,
         CASE WHEN LOWER(denomination) LIKE LOWER(?) THEN 0 ELSE 1 END,
         LENGTH(denomination),
         denomination
@@ -1951,6 +1977,10 @@
       pays:          'FR',
       cis,
       nom:           drug.denomination,
+      // Le filtre de la requête (LIKE '%Commercialis%') laisse passer aussi
+      // "Non commercialisée" — c'est voulu : un médicament retiré peut encore
+      // être dans une armoire à pharmacie. On le signale plutôt que de le cacher.
+      commercialise: (drug.etat_commercialisation || '').trim() === 'Commercialisée',
       forme:         drug.forme_pharmaceutique,
       voies:         drug.voies_administration,
       statut:        drug.statut_amm,
@@ -2323,9 +2353,18 @@
     // 3 parallel calls: BDPM proxy, SAM proxy, RxNorm
     // Include firstWord in searchTerms so RxNorm can find brand-named drugs
     const searchTerms = [...new Set([query, normalized, firstWord, innFromBrand].filter(Boolean))];
+    /* On cherche d'abord avec la DCI quand la marque en a une (ex. "levothyrox"
+       → "levothyroxine"). Mais les spécialités portent souvent le nom de marque,
+       pas la DCI : "LEVOTHYROX 100 microgrammes" ne contient pas "levothyroxine".
+       Si la DCI ne donne rien, on retente donc avec le nom de marque. */
+    const lookupFr = () => localDrugDetailFr(lookupTerm)
+                        || (lookupTerm !== firstWord ? localDrugDetailFr(firstWord) : null);
+    const lookupBe = () => localDrugDetailBe(lookupTerm)
+                        || (lookupTerm !== firstWord ? localDrugDetailBe(firstWord) : null);
+
     const [frR, beR, rxFirst] = await Promise.all([
-      dbReady ? Promise.resolve(localDrugDetailFr(lookupTerm)) : Promise.resolve(null),
-      dbReady ? Promise.resolve(localDrugDetailBe(lookupTerm)) : Promise.resolve(null),
+      dbReady ? Promise.resolve(lookupFr()) : Promise.resolve(null),
+      dbReady ? Promise.resolve(lookupBe()) : Promise.resolve(null),
       (async () => {
         const results = await Promise.all(
           searchTerms.map(term => jFetch(`${RXNORM}/rxcui.json?name=${encodeURIComponent(term)}&search=1`))
@@ -2441,9 +2480,12 @@
     const food = enrichFood(anchor);
 
     setLoadingMsg(t('loadingStep', 'Équivalents…'));
-    const equivalents = await enrichEquivalents(anchor);
+    const [equivalents, rcpFr] = await Promise.all([
+      enrichEquivalents(anchor),
+      fetchRcpFr(anchor._raw?.frData?.cis)
+    ]);
 
-    return { fdaLabel, fdaPerIngredient, ddi, food, equivalents };
+    return { fdaLabel, fdaPerIngredient, ddi, food, equivalents, rcpFr };
   }
 
   async function enrichClinical(anchor) {
@@ -2508,6 +2550,21 @@
   function enrichFood(anchor) {
     const matches = matchFoodInteractions(anchor);
     return { matches, _provenance: 'Table interne' };
+  }
+
+  /* ── RCP français (ANSM) — JSON statiques chargés à la demande ─
+     Le texte des RCP n'est pas dans drugs_fr.db : il pèserait ~104 Mo, au-delà
+     de la limite de 100 Mo par fichier de GitHub, et serait téléchargé en
+     entier par chaque utilisateur. Ici, un fichier d'environ 7 Ko par
+     médicament, mis en cache automatiquement par le Service Worker. */
+  async function fetchRcpFr(cis) {
+    if (!cis) return null;
+    try {
+      const r = await fetch(`rcp/${cis.slice(0, 3)}/${cis}.json`);
+      if (!r.ok) return null;
+      const data = await r.json();
+      return data?.s || null;
+    } catch (_) { return null; }
   }
 
   /* ── enrichEquivalents: pure-equivalent brand lookup ───────────
@@ -2592,7 +2649,7 @@
 
   /* ── renderResultsV2 ───────────────────────────────────────── */
   function renderResultsV2(anchor, enriched, profile) {
-    const { fdaLabel, ddi, food, equivalents } = enriched;
+    const { fdaLabel, ddi, food, equivalents, rcpFr } = enriched;
     const { frData, beData }      = anchor._raw;
     const fda = f => fdaLabel?.[f]?.[0] || null;
 
@@ -2689,6 +2746,9 @@
         <div class="drug-title">
           ${esc(anchor.displayName)}
           ${anchor.isCombo ? `<span class="combo-tag">COMBO</span>` : ''}
+          ${anchor._raw?.frData && anchor._raw.frData.commercialise === false
+            ? `<span class="withdrawn-tag" title="${t('withdrawnHint')}">⚠️ ${t('withdrawnTag')}</span>`
+            : ''}
         </div>
         ${headRows.length ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px;">${headRows.join('')}</div>` : ''}
       </div>`;
@@ -2697,11 +2757,28 @@
 
     /* ── Zone A: clinical sections ── */
     const tx = !!fdaLabel?._translated; // true when auto-translated
+
+    /* Le RCP français officiel (ANSM) prime sur OpenFDA quand il existe pour ce
+       médicament : même molécule, mais en français et avec les posologies
+       autorisées ici. OpenFDA reste le repli, notamment pour les médicaments
+       belges et ceux sans RCP exploitable côté ANSM. */
+    const cisFr = anchor._raw?.frData?.cis || null;
+    const pick  = (num, fdaText) => {
+      const rcpText = rcpFr?.[num]?.x;
+      return rcpText
+        ? { text: rcpText, prov: 'fr', tx: false }
+        : { text: fdaText, prov: 'us', tx };
+    };
+    const sIndic  = pick('4.1', fda('indications_and_usage') || fda('purpose'));
+    const sDosage = pick('4.2', fda('dosage_and_administration'));
+    const sSide   = pick('4.8', fda('adverse_reactions') || fda('warnings_and_cautions'));
+    const sContra = pick('4.3', fda('contraindications'));
+
     const clinSections = [
-      buildSection('💊', t('secIndication'),        fda('indications_and_usage') || fda('purpose'),          'us', '',        tx),
-      buildSection('📋', t('secDosage'),             fda('dosage_and_administration'),                        'us', '',        tx),
-      buildSection('⚠️', t('secSideEffects'),        fda('adverse_reactions') || fda('warnings_and_cautions'),'us', fda('adverse_reactions') ? 'warning' : '', tx),
-      buildSection('🚫', t('secContraindications'), fda('contraindications'),                                'us', '',        tx),
+      buildSection('💊', t('secIndication'),        sIndic.text,  sIndic.prov,  '',        sIndic.tx,  cisFr),
+      buildSection('📋', t('secDosage'),             sDosage.text, sDosage.prov, '',        sDosage.tx, cisFr),
+      buildSection('⚠️', t('secSideEffects'),        sSide.text,   sSide.prov,   sSide.text ? 'warning' : '', sSide.tx, cisFr),
+      buildSection('🚫', t('secContraindications'), sContra.text, sContra.prov, '',        sContra.tx, cisFr),
     ];
 
     /* ── Zone A: safety sections ── */
@@ -2888,11 +2965,19 @@
   }
 
   /* ── Helper: build a flat section row ─────────────────────── */
-  function buildSection(icon, title, content, provClass, stateCls = '', translated = false) {
+  function buildSection(icon, title, content, provClass, stateCls = '', translated = false, ansmCis = null) {
     const empty   = !content;
+    // Le RCP français est bien plus long que le texte OpenFDA tronqué : on lui
+    // laisse plus de place, le lien ANSM donnant accès au texte intégral.
+    const maxLen  = provClass === 'fr' ? 1200 : 500;
     const bodyHtml = empty
       ? `<span class="section-empty">${t('noDataFDA')}</span>`
-      : `<div class="section-content">${paragraphize(trunc(content, 500))}</div>`;
+      : `<div class="section-content">${paragraphize(trunc(content, maxLen))}</div>`;
+    const ansmHtml = ansmCis
+      ? `<a class="ansm-link" target="_blank" rel="noopener"
+             href="https://base-donnees-publique.medicaments.gouv.fr/medicament/${encodeURIComponent(ansmCis)}/extrait"
+          >🇫🇷 ${t('ansmLink')}</a>`
+      : '';
     const provLabel = provClass === 'us' ? 'OpenFDA' : provClass === 'fr' ? 'BDPM' : 'SAM';
     const txBadge   = translated
       ? `<span class="prov" style="background:var(--blue-lt);color:var(--blue-mid);margin-left:4px;" title="${t('translateNote')}">🌐 FR</span>`
@@ -2906,6 +2991,7 @@
             <span class="prov ${provClass}">${provLabel}</span>${txBadge}
           </div>
           ${bodyHtml}
+          ${ansmHtml}
         </div>
       </div>`;
   }
