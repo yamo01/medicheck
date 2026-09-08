@@ -1914,23 +1914,57 @@
     return rows.map(r => r.denomination);
   }
 
-  function localDrugDetailFr(query) {
-    const drug = queryOne(dbFr, `
+  /* Compare deux scores mot à mot. Le premier écart décide. */
+  function scoreIsBetter(a, b) {
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return a[i] < b[i];
+    }
+    return false;
+  }
+
+  /* Choisit la spécialité qui correspond le mieux à la requête complète.
+     Une recherche sur la DCI seule perd le dosage : "dafalgan 500 mg"
+     devenait "paracetamol", et la base renvoyait le premier paracétamol
+     venu, en 1 g. On compare donc chaque candidat à tous les mots tapés
+     par l'utilisateur, dosage et forme compris. */
+  function pickBestMatch(rows, nameKey, fullQuery, term) {
+    if (!rows.length) return null;
+    const words  = normalizeQuery(fullQuery || term).split(/\s+/).filter(Boolean);
+    const prefix = normalizeQuery(term);
+    let best = null, bestScore = null;
+    for (const row of rows) {
+      const name  = normalizeQuery(row[nameKey] || '');
+      // Un dosage doit correspondre au mot entier : sans cette règle, "100"
+      // se retrouve dans "1000" et un Doliprane 1000 mg répondait à une
+      // recherche de Doliprane 100 mg.
+      const parts = new Set(name.split(/[\s-]+/).filter(Boolean));
+      const hits  = words.filter(w => /^\d/.test(w) ? parts.has(w) : name.includes(w)).length;
+      const score = [
+        -hits,                              // le plus de mots retrouvés
+        row.retire ? 1 : 0,                 // encore commercialisé
+        name.startsWith(prefix) ? 0 : 1,    // le nom commence par le terme
+        name.length                         // le nom le plus simple
+      ];
+      if (!bestScore || scoreIsBetter(score, bestScore)) { best = row; bestScore = score; }
+    }
+    return best;
+  }
+
+  function localDrugDetailFr(query, fullQuery = null) {
+    // On récupère tous les candidats, puis on les départage sur la requête
+    // complète. Un médicament retiré du marché reste trouvable (un badge le
+    // signale), mais il passe après un équivalent encore commercialisé.
+    const candidates = queryAll(dbFr, `
       SELECT cis, denomination, forme_pharmaceutique, voies_administration,
-             statut_amm, etat_commercialisation, titulaire, surveillance_renforcee
+             statut_amm, etat_commercialisation, titulaire, surveillance_renforcee,
+             CASE WHEN etat_commercialisation = 'Commercialisée' THEN 0 ELSE 1 END AS retire
       FROM specialite
       WHERE denomination LIKE ?
         AND etat_commercialisation LIKE '%Commercialis%'
-      ORDER BY
-        -- Un médicament retiré du marché reste trouvable (il est signalé par un
-        -- badge), mais il ne doit pas être choisi à la place d'un équivalent
-        -- encore commercialisé.
-        CASE WHEN etat_commercialisation = 'Commercialisée' THEN 0 ELSE 1 END,
-        CASE WHEN LOWER(denomination) LIKE LOWER(?) THEN 0 ELSE 1 END,
-        LENGTH(denomination),
-        denomination
-      LIMIT 1
-    `, [`%${query}%`, `${query}%`]);
+      ORDER BY retire, LENGTH(denomination), denomination
+      LIMIT 400
+    `, [`%${query}%`]);
+    const drug = pickBestMatch(candidates, 'denomination', fullQuery, query);
     if (!drug) return null;
     const cis = drug.cis;
 
@@ -2046,19 +2080,19 @@
     return rows.map(r => r.official_name);
   }
 
-  function localDrugDetailBe(query) {
-    const drug = queryOne(dbBe, `
+  function localDrugDetailBe(query, fullQuery = null) {
+    // Même principe qu'en France : on départage les candidats sur la requête
+    // complète, pour garder le dosage et la forme tapés par l'utilisateur.
+    const candidates = queryAll(dbBe, `
       SELECT code, official_name, status, medicine_type,
-             company_name, name_fr, name_nl
+             company_name, name_fr, name_nl, 0 AS retire
       FROM amp
       WHERE official_name LIKE ?
         AND status = 'AUTHORIZED'
-      ORDER BY
-        CASE WHEN LOWER(official_name) LIKE LOWER(?) THEN 0 ELSE 1 END,
-        LENGTH(official_name),
-        official_name
-      LIMIT 1
-    `, [`%${query}%`, `${query}%`]);
+      ORDER BY LENGTH(official_name), official_name
+      LIMIT 400
+    `, [`%${query}%`]);
+    const drug = pickBestMatch(candidates, 'official_name', fullQuery, query);
     if (!drug) return null;
     const code = drug.code;
 
@@ -2353,14 +2387,23 @@
     // 3 parallel calls: BDPM proxy, SAM proxy, RxNorm
     // Include firstWord in searchTerms so RxNorm can find brand-named drugs
     const searchTerms = [...new Set([query, normalized, firstWord, innFromBrand].filter(Boolean))];
-    /* On cherche d'abord avec la DCI quand la marque en a une (ex. "levothyrox"
-       → "levothyroxine"). Mais les spécialités portent souvent le nom de marque,
-       pas la DCI : "LEVOTHYROX 100 microgrammes" ne contient pas "levothyroxine".
-       Si la DCI ne donne rien, on retente donc avec le nom de marque. */
-    const lookupFr = () => localDrugDetailFr(lookupTerm)
-                        || (lookupTerm !== firstWord ? localDrugDetailFr(firstWord) : null);
-    const lookupBe = () => localDrugDetailBe(lookupTerm)
-                        || (lookupTerm !== firstWord ? localDrugDetailBe(firstWord) : null);
+    /* On cherche d'abord avec le nom de marque, car les spécialités portent ce
+       nom et pas la DCI : "DAFALGAN 500 mg" existe dans la BDPM, "paracetamol"
+       y renvoie n'importe quel paracétamol. La DCI ne sert que de repli, quand
+       la marque est absente de la base (ex. une marque belge cherchée côté
+       France). Dans les deux cas on passe la requête entière, pour garder le
+       dosage et la forme. */
+    let frViaBrand = false, beViaBrand = false;
+    const lookupFr = () => {
+      const direct = localDrugDetailFr(firstWord, normalized);
+      if (direct) { frViaBrand = true; return direct; }
+      return lookupTerm !== firstWord ? localDrugDetailFr(lookupTerm, normalized) : null;
+    };
+    const lookupBe = () => {
+      const direct = localDrugDetailBe(firstWord, normalized);
+      if (direct) { beViaBrand = true; return direct; }
+      return lookupTerm !== firstWord ? localDrugDetailBe(lookupTerm, normalized) : null;
+    };
 
     const [frR, beR, rxFirst] = await Promise.all([
       dbReady ? Promise.resolve(lookupFr()) : Promise.resolve(null),
@@ -2379,7 +2422,11 @@
 
     // Build ingredients array from whichever source found substances
     const ingredients = [];
-    const substSrc = beData?.substances?.length ? beData.substances : frData?.substances || [];
+    /* On prend les substances de la base qui a reconnu la marque tapée. Sinon le
+       dosage affiché pouvait venir d'un autre produit, trouvé par repli sur la DCI. */
+    const substOrder  = frViaBrand && !beViaBrand ? [frData, beData] : [beData, frData];
+    const substOwner  = substOrder.find(d => d?.substances?.length) || null;
+    const substSrc    = substOwner?.substances || [];
 
     if (substSrc.length > 0) {
       substSrc.forEach((s, idx) => {
@@ -2391,7 +2438,7 @@
           atc:   null,  // filled after RxClass call
           rxcui: idx === 0 ? rxcui : null,
           dose:  s.dosage ? `${s.dosage}${s.unite ? ' ' + s.unite : s.reference ? ' ' + s.reference : ''}`.trim() : null,
-          _source: beData ? 'SAM' : 'BDPM'
+          _source: substOwner === beData ? 'SAM' : 'BDPM'
         });
       });
     } else if (innFromBrand) {
@@ -2420,12 +2467,23 @@
     // Brand names: FR from lookup table, BE from proxy SAM query, US from OpenFDA later
     const frBrandsLookup = FR_INN_TO_BRANDS[ingredients[0]?.inn] || [];
     const beBrandsFromProxy = beData?.brands_be || [];
-    const displayName = beData?.nom
-      ? capFirst(beData.nom.split(' ')[0])
-      : frData?.nom
-        ? capFirst(frData.nom.split(' ')[0])
-        : innFromBrand ? capFirst(innFromBrand.split(' ')[0])
-        : capFirst(query);
+    /* Le nom affiché vient de la base qui a reconnu la marque tapée. Sans cette
+       règle, "Doliprane" — marque française absente de la base belge —
+       s'affichait "Paracetamol", parce que le repli belge par DCI passait
+       devant le résultat français. */
+    const nameSources = [
+      { nom: beData?.nom, viaBrand: beViaBrand },
+      { nom: frData?.nom, viaBrand: frViaBrand }
+    ].filter(src => src.nom);
+    const chosenName  = (nameSources.find(src => src.viaBrand) || nameSources[0])?.nom || null;
+    /* Les dénominations de la BDPM sont écrites en majuscules ("DOLIPRANE").
+       On les ramène en casse normale, sans toucher aux noms belges qui sont
+       déjà en casse mixte. */
+    const brandCase   = w => /^[^a-z]+$/.test(w) ? capFirst(w.toLowerCase()) : capFirst(w);
+    const displayName = chosenName
+      ? brandCase(chosenName.split(' ')[0])
+      : innFromBrand ? brandCase(innFromBrand.split(' ')[0])
+      : brandCase(query);
 
     const foundIn = [...(beData ? ['SAM'] : []), ...(frData ? ['BDPM'] : []), ...(rxcui ? ['RxNorm'] : [])];
 
