@@ -2394,27 +2394,33 @@
        France). Dans les deux cas on passe la requête entière, pour garder le
        dosage et la forme. */
     let frViaBrand = false, beViaBrand = false;
-    const lookupFr = () => {
-      const direct = localDrugDetailFr(firstWord, normalized);
+    const lookupFr = (hint) => {
+      const direct = localDrugDetailFr(firstWord, hint);
       if (direct) { frViaBrand = true; return direct; }
-      return lookupTerm !== firstWord ? localDrugDetailFr(lookupTerm, normalized) : null;
+      return lookupTerm !== firstWord ? localDrugDetailFr(lookupTerm, hint) : null;
     };
-    const lookupBe = () => {
-      const direct = localDrugDetailBe(firstWord, normalized);
+    const lookupBe = (hint) => {
+      const direct = localDrugDetailBe(firstWord, hint);
       if (direct) { beViaBrand = true; return direct; }
-      return lookupTerm !== firstWord ? localDrugDetailBe(lookupTerm, normalized) : null;
+      return lookupTerm !== firstWord ? localDrugDetailBe(lookupTerm, hint) : null;
     };
 
-    const [frR, beR, rxFirst] = await Promise.all([
-      dbReady ? Promise.resolve(lookupFr()) : Promise.resolve(null),
-      dbReady ? Promise.resolve(lookupBe()) : Promise.resolve(null),
-      (async () => {
-        const results = await Promise.all(
-          searchTerms.map(term => jFetch(`${RXNORM}/rxcui.json?name=${encodeURIComponent(term)}&search=1`))
-        );
-        return results.find(r => r?.idGroup?.rxnormId?.[0]) || null;
-      })()
-    ]);
+    /* La base belge est interrogée en premier. Quand l'utilisateur choisit un
+       produit belge, son nom ne porte pas la forme ("Dafalgan 500 mg"), alors
+       que la dénomination française la porte ("DAFALGAN 500 mg, comprimé
+       effervescent sécable"). On ajoute donc la forme belge aux mots cherchés
+       côté français. Sans elle, un comprimé effervescent belge affichait la
+       posologie française de la gélule, en gélules. */
+    const beR = dbReady ? lookupBe(normalized) : null;
+    const frHint = [normalized, beR?.forme].filter(Boolean).join(' ');
+    const frR = dbReady ? lookupFr(frHint) : null;
+
+    const rxFirst = await (async () => {
+      const results = await Promise.all(
+        searchTerms.map(term => jFetch(`${RXNORM}/rxcui.json?name=${encodeURIComponent(term)}&search=1`))
+      );
+      return results.find(r => r?.idGroup?.rxnormId?.[0]) || null;
+    })();
 
     const frData = frR?.nom && !frR?.error ? frR : null;
     const beData = beR?.nom && !beR?.error ? beR : null;
@@ -2471,6 +2477,13 @@
        règle, "Doliprane" — marque française absente de la base belge —
        s'affichait "Paracetamol", parce que le repli belge par DCI passait
        devant le résultat français. */
+    /* La base qui a reconnu la marque fournit aussi la forme et la voie. */
+    const formeOrder = frViaBrand && !beViaBrand ? [frData, beData] : [beData, frData];
+    const formeSrc   = formeOrder.find(d => d?.forme) || null;
+    const formeOwner = formeSrc
+      ? { forme: formeSrc.forme, voie: formeSrc.voie || formeSrc.voies || null }
+      : {};
+
     const nameSources = [
       { nom: beData?.nom, viaBrand: beViaBrand },
       { nom: frData?.nom, viaBrand: frViaBrand }
@@ -2496,6 +2509,7 @@
       brands:    { fr: frBrandsLookup, be: beBrandsFromProxy, us: [] },
       foundIn,
       innConflict: null,  // edge case — skip for now
+      _formeOwner: formeOwner,
       _raw: { frData, beData, rxcui }
     };
   }
@@ -2757,7 +2771,12 @@
     const allBrands = [...new Set([...anchor.brands.fr, ...(fdaLabel?.openfda?.brand_name || []).slice(0, 3)])];
 
     // Subtitle (form + route from proxy)
-    const formLine = [beData?.forme || frData?.forme, beData?.voie || frData?.voies].filter(Boolean).join(' — ');
+    /* Même règle que pour le nom : la forme vient de la base qui a reconnu la
+       marque. Sinon "Doliprane 1000 mg, gélule" s'affichait "Comprimé", la
+       forme d'un paracétamol belge trouvé par repli sur la DCI. */
+    const formeOwner = anchor._formeOwner || {};
+    // La BDPM écrit les formes en minuscules, la base belge avec une capitale.
+    const formLine = [formeOwner.forme, formeOwner.voie].filter(Boolean).map(capFirst).join(' — ');
 
     /* ── Alert banner ── */
     const allergyIngNote = allergyHitIngredient
