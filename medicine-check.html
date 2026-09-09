@@ -429,6 +429,32 @@
     .section-content { font-size: 13px; color: var(--text-700); line-height: 1.6; }
     .section-content p { margin: 0 0 10px; }
     .section-content p:last-child { margin-bottom: 0; }
+    /* Tableaux de posologie du RCP. Le conteneur défile seul : sur mobile,
+       une grille de 4 colonnes ne tient pas, et la page ne doit pas se
+       décaler horizontalement pour autant. */
+    .rcp-table-wrap { overflow-x: auto; margin: 0 0 12px; -webkit-overflow-scrolling: touch; }
+    .rcp-table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 12.5px; }
+    .rcp-table th, .rcp-table td {
+      border: 1px solid var(--border); padding: 7px 9px;
+      text-align: left; vertical-align: top; line-height: 1.45;
+    }
+    .rcp-table th { background: var(--bg); font-weight: 700; color: var(--text-900); }
+    .rcp-table tbody tr:nth-child(even) td { background: var(--bg); }
+    /* Sections longues : on limite la hauteur au lieu de couper le texte.
+       Un tableau de posologie arrive souvent après 1 200 caractères de
+       préambule — le tronquer le faisait disparaître complètement. */
+    .section-content.clamped { max-height: 260px; overflow: hidden; position: relative; }
+    .section-content.clamped::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46px;
+      background: linear-gradient(to bottom, transparent, var(--card, #fff));
+      pointer-events: none;
+    }
+    .see-more {
+      margin-top: 8px; padding: 5px 11px; font-size: 12px; font-weight: 600;
+      color: var(--blue-mid); background: var(--blue-lt); border: 0;
+      border-radius: 7px; cursor: pointer; font-family: inherit;
+    }
+    .see-more:hover { filter: brightness(0.96); }
     .section-empty   { color: var(--text-400); font-style: italic; font-size: 13px; }
     .withdrawn-tag {
       display: inline-block; vertical-align: middle; margin-left: 8px;
@@ -906,6 +932,8 @@
       searchPlaceholder: 'Ex: ibuprofène, Doliprane, amoxicilline…',
       searchBtn:         'Vérifier →',
       ansmLink:          'Voir la fiche officielle ANSM →',
+      seeMore:           'Voir plus ▾',
+      seeLess:           'Voir moins ▴',
       withdrawnTag:      'Retiré du marché',
       withdrawnHint:     'Ce médicament n\u2019est plus commercialisé en France. '
                          + 'Les informations restent affichées à titre indicatif.',
@@ -1041,6 +1069,8 @@
       searchPlaceholder: 'E.g. ibuprofen, Paracetamol, amoxicillin…',
       searchBtn:         'Check →',
       ansmLink:          'View the official ANSM record →',
+      seeMore:           'Show more ▾',
+      seeLess:           'Show less ▴',
       withdrawnTag:      'Withdrawn',
       withdrawnHint:     'This medicine is no longer marketed in France. '
                          + 'The information is shown for reference only.',
@@ -1596,6 +1626,51 @@
   const paragraphize = s => String(s || '').split(/(?<=[.!?])\s+(?=[A-Z(])/).map(p => `<p>${esc(p.trim())}</p>`).join('');
   const capFirst = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
+  /* Word se sert aussi de tableaux d'une seule colonne comme encadrés. Les
+     afficher en grille n'apporterait rien : on les rend en paragraphes. */
+  const isRealTable = rows => rows.length > 1 && rows.some(r => r.length > 1);
+
+  function renderTable(rows) {
+    if (!isRealTable(rows)) {
+      return rows.map(r => paragraphize(r.join(' '))).join('');
+    }
+    /* En-tête seulement si la première ligne couvre toutes les colonnes.
+       Certains tableaux de l'ANSM ont un en-tête sur deux niveaux, avec des
+       cellules fusionnées : la première ligne compte alors moins de cellules
+       que les suivantes, et la présenter comme en-tête serait trompeur. */
+    const width = Math.max(...rows.map(r => r.length));
+    const head  = rows[0].length === width ? rows[0] : null;
+    const body  = head ? rows.slice(1) : rows;
+    const cells = (row, tag) => row.map(c => `<${tag}>${esc(c)}</${tag}>`).join('');
+    return `<div class="rcp-table-wrap"><table class="rcp-table">`
+      + (head ? `<thead><tr>${cells(head, 'th')}</tr></thead>` : '')
+      + `<tbody>${body.map(r => `<tr>${cells(r, 'td')}</tr>`).join('')}</tbody>`
+      + `</table></div>`;
+  }
+
+  /* Rend une section du RCP découpée en paragraphes et tableaux. Rien n'est
+     coupé ici : la section est rendue en entier, puis l'affichage limite sa
+     hauteur. Couper au caractère faisait disparaître les tableaux de
+     posologie, qui arrivent après un long préambule. */
+  function renderBlocks(blocks) {
+    return blocks.map(b => b.tbl ? renderTable(b.tbl)
+                        : b.p   ? paragraphize(b.p)
+                        : '').join('');
+  }
+
+  /* Longueur du texte d'une section, tableaux compris. Sert à décider si le
+     bouton « voir plus » est utile. */
+  function blocksLength(blocks) {
+    return blocks.reduce((n, b) => n + (b.p ? b.p.length
+      : b.tbl ? b.tbl.reduce((m, row) => m + row.join(' ').length, 0) : 0), 0);
+  }
+
+  function toggleSectionMore(btn) {
+    const box = btn.previousElementSibling;
+    const open = box.classList.toggle('clamped') === false;
+    btn.textContent = open ? t('seeLess') : t('seeMore');
+  }
+
   async function jFetch(url) {
     try {
       const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
@@ -1927,9 +2002,15 @@
      devenait "paracetamol", et la base renvoyait le premier paracétamol
      venu, en 1 g. On compare donc chaque candidat à tous les mots tapés
      par l'utilisateur, dosage et forme compris. */
-  function pickBestMatch(rows, nameKey, fullQuery, term) {
+  function pickBestMatch(rows, nameKey, fullQuery, term, hint) {
     if (!rows.length) return null;
     const words  = normalizeQuery(fullQuery || term).split(/\s+/).filter(Boolean);
+    // Mots d'appoint (la forme lue dans l'autre base). Ils départagent les
+    // candidats restants, mais ne passent jamais devant ce que l'utilisateur
+    // a tapé : « Dafalgan 500 mg, gélule » doit donner la gélule, même si le
+    // produit belge du même nom est un comprimé effervescent.
+    const extra  = normalizeQuery(hint || '').split(/\s+/)
+      .filter(w => w && !words.includes(w));
     const prefix = normalizeQuery(term);
     let best = null, bestScore = null;
     for (const row of rows) {
@@ -1938,9 +2019,12 @@
       // se retrouve dans "1000" et un Doliprane 1000 mg répondait à une
       // recherche de Doliprane 100 mg.
       const parts = new Set(name.split(/[\s-]+/).filter(Boolean));
-      const hits  = words.filter(w => /^\d/.test(w) ? parts.has(w) : name.includes(w)).length;
+      const found = w => /^\d/.test(w) ? parts.has(w) : name.includes(w);
+      const hits  = words.filter(found).length;
+      const bonus = extra.filter(found).length;
       const score = [
-        -hits,                              // le plus de mots retrouvés
+        -hits,                              // les mots tapés d'abord
+        -bonus,                             // puis les mots d'appoint
         row.retire ? 1 : 0,                 // encore commercialisé
         name.startsWith(prefix) ? 0 : 1,    // le nom commence par le terme
         name.length                         // le nom le plus simple
@@ -1950,7 +2034,7 @@
     return best;
   }
 
-  function localDrugDetailFr(query, fullQuery = null) {
+  function localDrugDetailFr(query, fullQuery = null, hint = null) {
     // On récupère tous les candidats, puis on les départage sur la requête
     // complète. Un médicament retiré du marché reste trouvable (un badge le
     // signale), mais il passe après un équivalent encore commercialisé.
@@ -1964,7 +2048,7 @@
       ORDER BY retire, LENGTH(denomination), denomination
       LIMIT 400
     `, [`%${query}%`]);
-    const drug = pickBestMatch(candidates, 'denomination', fullQuery, query);
+    const drug = pickBestMatch(candidates, 'denomination', fullQuery, query, hint);
     if (!drug) return null;
     const cis = drug.cis;
 
@@ -2080,7 +2164,7 @@
     return rows.map(r => r.official_name);
   }
 
-  function localDrugDetailBe(query, fullQuery = null) {
+  function localDrugDetailBe(query, fullQuery = null, hint = null) {
     // Même principe qu'en France : on départage les candidats sur la requête
     // complète, pour garder le dosage et la forme tapés par l'utilisateur.
     const candidates = queryAll(dbBe, `
@@ -2092,7 +2176,7 @@
       ORDER BY LENGTH(official_name), official_name
       LIMIT 400
     `, [`%${query}%`]);
-    const drug = pickBestMatch(candidates, 'official_name', fullQuery, query);
+    const drug = pickBestMatch(candidates, 'official_name', fullQuery, query, hint);
     if (!drug) return null;
     const code = drug.code;
 
@@ -2395,14 +2479,14 @@
        dosage et la forme. */
     let frViaBrand = false, beViaBrand = false;
     const lookupFr = (hint) => {
-      const direct = localDrugDetailFr(firstWord, hint);
+      const direct = localDrugDetailFr(firstWord, normalized, hint);
       if (direct) { frViaBrand = true; return direct; }
-      return lookupTerm !== firstWord ? localDrugDetailFr(lookupTerm, hint) : null;
+      return lookupTerm !== firstWord ? localDrugDetailFr(lookupTerm, normalized, hint) : null;
     };
     const lookupBe = (hint) => {
-      const direct = localDrugDetailBe(firstWord, hint);
+      const direct = localDrugDetailBe(firstWord, normalized, hint);
       if (direct) { beViaBrand = true; return direct; }
-      return lookupTerm !== firstWord ? localDrugDetailBe(lookupTerm, hint) : null;
+      return lookupTerm !== firstWord ? localDrugDetailBe(lookupTerm, normalized, hint) : null;
     };
 
     /* La base belge est interrogée en premier. Quand l'utilisateur choisit un
@@ -2411,9 +2495,8 @@
        effervescent sécable"). On ajoute donc la forme belge aux mots cherchés
        côté français. Sans elle, un comprimé effervescent belge affichait la
        posologie française de la gélule, en gélules. */
-    const beR = dbReady ? lookupBe(normalized) : null;
-    const frHint = [normalized, beR?.forme].filter(Boolean).join(' ');
-    const frR = dbReady ? lookupFr(frHint) : null;
+    const beR = dbReady ? lookupBe(null) : null;
+    const frR = dbReady ? lookupFr(beR?.forme || null) : null;
 
     const rxFirst = await (async () => {
       const results = await Promise.all(
@@ -2428,9 +2511,24 @@
 
     // Build ingredients array from whichever source found substances
     const ingredients = [];
-    /* On prend les substances de la base qui a reconnu la marque tapée. Sinon le
-       dosage affiché pouvait venir d'un autre produit, trouvé par repli sur la DCI. */
-    const substOrder  = frViaBrand && !beViaBrand ? [frData, beData] : [beData, frData];
+    /* Laquelle des deux bases décrit le produit que l'utilisateur visait ?
+       On compte les mots de sa recherche présents dans chaque dénomination.
+       La dénomination française porte la forme ("DAFALGAN 500 mg, gélule"),
+       la belge non ("Dafalgan 500 mg") : taper la forme suffit donc à
+       désigner la fiche française. À égalité, la base belge reste devant,
+       comme avant. */
+    const nameHits = d => {
+      if (!d?.nom) return -1;
+      const n = normalizeQuery(d.nom);
+      return normalized.split(/\s+/).filter(w => w && n.includes(w)).length;
+    };
+    const preferOrder = nameHits(frData) > nameHits(beData)
+      ? [frData, beData] : [beData, frData];
+
+    /* On prend les substances de la base qui décrit le mieux le produit tapé.
+       Sinon le dosage affiché pouvait venir d'un autre produit, trouvé par
+       repli sur la DCI. */
+    const substOrder  = preferOrder;
     const substOwner  = substOrder.find(d => d?.substances?.length) || null;
     const substSrc    = substOwner?.substances || [];
 
@@ -2477,8 +2575,8 @@
        règle, "Doliprane" — marque française absente de la base belge —
        s'affichait "Paracetamol", parce que le repli belge par DCI passait
        devant le résultat français. */
-    /* La base qui a reconnu la marque fournit aussi la forme et la voie. */
-    const formeOrder = frViaBrand && !beViaBrand ? [frData, beData] : [beData, frData];
+    /* La forme et la voie viennent de la même base que les substances. */
+    const formeOrder = preferOrder;
     const formeSrc   = formeOrder.find(d => d?.forme) || null;
     const formeOwner = formeSrc
       ? { forme: formeSrc.forme, voie: formeSrc.voie || formeSrc.voies || null }
@@ -2841,21 +2939,24 @@
        belges et ceux sans RCP exploitable côté ANSM. */
     const cisFr = anchor._raw?.frData?.cis || null;
     const pick  = (num, fdaText) => {
-      const rcpText = rcpFr?.[num]?.x;
-      return rcpText
-        ? { text: rcpText, prov: 'fr', tx: false }
-        : { text: fdaText, prov: 'us', tx };
+      const sec = rcpFr?.[num];
+      // "b" = section structurée, avec ses tableaux. "x" = texte simple.
+      // L'export ne produit jamais les deux pour une même section.
+      if (sec?.b?.length) return { text: null, blocks: sec.b, prov: 'fr', tx: false };
+      if (sec?.x)         return { text: sec.x, blocks: null, prov: 'fr', tx: false };
+      return { text: fdaText, blocks: null, prov: 'us', tx };
     };
     const sIndic  = pick('4.1', fda('indications_and_usage') || fda('purpose'));
     const sDosage = pick('4.2', fda('dosage_and_administration'));
     const sSide   = pick('4.8', fda('adverse_reactions') || fda('warnings_and_cautions'));
     const sContra = pick('4.3', fda('contraindications'));
 
+    const hasBody = s => !!(s.text || s.blocks?.length);
     const clinSections = [
-      buildSection('💊', t('secIndication'),        sIndic.text,  sIndic.prov,  '',        sIndic.tx,  cisFr),
-      buildSection('📋', t('secDosage'),             sDosage.text, sDosage.prov, '',        sDosage.tx, cisFr),
-      buildSection('⚠️', t('secSideEffects'),        sSide.text,   sSide.prov,   sSide.text ? 'warning' : '', sSide.tx, cisFr),
-      buildSection('🚫', t('secContraindications'), sContra.text, sContra.prov, '',        sContra.tx, cisFr),
+      buildSection('💊', t('secIndication'),        sIndic.text,  sIndic.prov,  '',        sIndic.tx,  cisFr, sIndic.blocks),
+      buildSection('📋', t('secDosage'),             sDosage.text, sDosage.prov, '',        sDosage.tx, cisFr, sDosage.blocks),
+      buildSection('⚠️', t('secSideEffects'),        sSide.text,   sSide.prov,   hasBody(sSide) ? 'warning' : '', sSide.tx, cisFr, sSide.blocks),
+      buildSection('🚫', t('secContraindications'), sContra.text, sContra.prov, '',        sContra.tx, cisFr, sContra.blocks),
     ];
 
     /* ── Zone A: safety sections ── */
@@ -3042,14 +3143,18 @@
   }
 
   /* ── Helper: build a flat section row ─────────────────────── */
-  function buildSection(icon, title, content, provClass, stateCls = '', translated = false, ansmCis = null) {
-    const empty   = !content;
+  function buildSection(icon, title, content, provClass, stateCls = '', translated = false, ansmCis = null, blocks = null) {
+    const empty   = !content && !(blocks && blocks.length);
     // Le RCP français est bien plus long que le texte OpenFDA tronqué : on lui
     // laisse plus de place, le lien ANSM donnant accès au texte intégral.
     const maxLen  = provClass === 'fr' ? 1200 : 500;
+    const useBlocks = !!(blocks && blocks.length);
+    const inner   = useBlocks ? renderBlocks(blocks) : paragraphize(trunc(content, maxLen));
+    const long    = useBlocks ? blocksLength(blocks) > maxLen : false;
     const bodyHtml = empty
       ? `<span class="section-empty">${t('noDataFDA')}</span>`
-      : `<div class="section-content">${paragraphize(trunc(content, maxLen))}</div>`;
+      : `<div class="section-content${long ? ' clamped' : ''}">${inner}</div>`
+        + (long ? `<button class="see-more" onclick="toggleSectionMore(this)">${t('seeMore')}</button>` : '');
     const ansmHtml = ansmCis
       ? `<a class="ansm-link" target="_blank" rel="noopener"
              href="https://base-donnees-publique.medicaments.gouv.fr/medicament/${encodeURIComponent(ansmCis)}/extrait"
