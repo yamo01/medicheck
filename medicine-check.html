@@ -440,6 +440,12 @@
     }
     .rcp-table th { background: var(--bg); font-weight: 700; color: var(--text-900); }
     .rcp-table tbody tr:nth-child(even) td { background: var(--bg); }
+    /* Nom du produit en tête de chaque partie d'un document à plusieurs RCP */
+    .section-content p.rcp-sub {
+      font-weight: 700; color: var(--text-900);
+      margin: 16px 0 8px; padding-top: 10px; border-top: 1px solid var(--border);
+    }
+    .section-content p.rcp-sub:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
     /* Sections longues : on limite la hauteur au lieu de couper le texte.
        Un tableau de posologie arrive souvent après 1 200 caractères de
        préambule — le tronquer le faisait disparaître complètement. */
@@ -481,6 +487,13 @@
     .prov.fr     { background: var(--blue-lt);   color: var(--blue-mid); }
     .prov.be     { background: var(--amber-lt);  color: var(--amber-dk); }
     .prov.us     { background: var(--green-lt);  color: var(--green-dk); }
+    .prov.eu     { background: #e7ecfb;           color: #2d3f8a; }
+    /* Mention des produits couverts par un même RCP */
+    .covers-note {
+      font-size: 12px; line-height: 1.5; color: var(--text-500);
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; margin: 0 0 10px;
+    }
     .prov.curated{ background: var(--purple-lt); color: var(--purple); }
     body.hide-prov .prov { display: none; }
 
@@ -934,6 +947,9 @@
       ansmLink:          'Voir la fiche officielle ANSM →',
       seeMore:           'Voir plus ▾',
       seeLess:           'Voir moins ▴',
+      afmpsLink:         'Voir le RCP officiel AFMPS (PDF) →',
+      emaLink:           'Voir le RCP officiel EMA (PDF) →',
+      coversNote:        'Ce résumé des caractéristiques couvre aussi :',
       withdrawnTag:      'Retiré du marché',
       withdrawnHint:     'Ce médicament n\u2019est plus commercialisé en France. '
                          + 'Les informations restent affichées à titre indicatif.',
@@ -1071,6 +1087,9 @@
       ansmLink:          'View the official ANSM record →',
       seeMore:           'Show more ▾',
       seeLess:           'Show less ▴',
+      afmpsLink:         'View the official FAMHP SmPC (PDF) →',
+      emaLink:           'View the official EMA SmPC (PDF) →',
+      coversNote:        'This summary of product characteristics also covers:',
       withdrawnTag:      'Withdrawn',
       withdrawnHint:     'This medicine is no longer marketed in France. '
                          + 'The information is shown for reference only.',
@@ -1653,7 +1672,10 @@
      hauteur. Couper au caractère faisait disparaître les tableaux de
      posologie, qui arrivent après un long préambule. */
   function renderBlocks(blocks) {
+    // "h" : nom du produit en tête d'une partie, quand un document de l'EMA
+    // réunit plusieurs RCP (un par dosage).
     return blocks.map(b => b.tbl ? renderTable(b.tbl)
+                        : b.h   ? `<p class="rcp-sub">${esc(b.h)}</p>`
                         : b.p   ? paragraphize(b.p)
                         : '').join('');
   }
@@ -1661,7 +1683,7 @@
   /* Longueur du texte d'une section, tableaux compris. Sert à décider si le
      bouton « voir plus » est utile. */
   function blocksLength(blocks) {
-    return blocks.reduce((n, b) => n + (b.p ? b.p.length
+    return blocks.reduce((n, b) => n + (b.p ? b.p.length : b.h ? b.h.length
       : b.tbl ? b.tbl.reduce((m, row) => m + row.join(' ').length, 0) : 0), 0);
   }
 
@@ -2582,6 +2604,12 @@
       ? { forme: formeSrc.forme, voie: formeSrc.voie || formeSrc.voies || null }
       : {};
 
+    /* Pays du médicament : celui de la base qui décrit le mieux le produit
+       tapé. Il fixe l'ordre de priorité des RCP — le pays, puis l'EMA, puis
+       OpenFDA. Un choix dans les suggestions le remplace (voir searchDrug). */
+    const paysSrc = preferOrder.find(Boolean) || null;
+    const pays    = paysSrc === beData ? 'BE' : paysSrc === frData ? 'FR' : null;
+
     const nameSources = [
       { nom: beData?.nom, viaBrand: beViaBrand },
       { nom: frData?.nom, viaBrand: frViaBrand }
@@ -2607,6 +2635,7 @@
       brands:    { fr: frBrandsLookup, be: beBrandsFromProxy, us: [] },
       foundIn,
       innConflict: null,  // edge case — skip for now
+      pays,
       _formeOwner: formeOwner,
       _raw: { frData, beData, rxcui }
     };
@@ -2650,12 +2679,18 @@
     const food = enrichFood(anchor);
 
     setLoadingMsg(t('loadingStep', 'Équivalents…'));
-    const [equivalents, rcpFr] = await Promise.all([
+    // On ne charge que les sources utiles au pays du médicament : le RCP
+    // d'un pays ne sert pas pour un médicament de l'autre pays.
+    const nomPays = (anchor.pays === 'BE' ? anchor._raw?.beData?.nom : anchor._raw?.frData?.nom)
+                 || anchor.normalized;
+    const [equivalents, rcpFr, rcpBe, rcpEu] = await Promise.all([
       enrichEquivalents(anchor),
-      fetchRcpFr(anchor._raw?.frData?.cis)
+      anchor.pays === 'FR' ? fetchRcpFr(anchor._raw?.frData?.cis) : null,
+      anchor.pays === 'BE' ? fetchRcpBe(anchor._raw?.beData?.code) : null,
+      fetchRcpEu(nomPays)
     ]);
 
-    return { fdaLabel, fdaPerIngredient, ddi, food, equivalents, rcpFr };
+    return { fdaLabel, fdaPerIngredient, ddi, food, equivalents, rcpFr, rcpBe, rcpEu };
   }
 
   async function enrichClinical(anchor) {
@@ -2727,10 +2762,46 @@
      de la limite de 100 Mo par fichier de GitHub, et serait téléchargé en
      entier par chaque utilisateur. Ici, un fichier d'environ 7 Ko par
      médicament, mis en cache automatiquement par le Service Worker. */
+  async function fetchJson(url) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (_) { return null; }
+  }
+
+  /* RCP belge : un fichier par médicament, rangé par les 3 premiers chiffres
+     de son code (SAM660978-00 → rcp_be/660/). Contient aussi l'adresse du PDF
+     officiel de l'AFMPS et la liste des produits couverts. */
+  async function fetchRcpBe(code) {
+    if (!code) return null;
+    const shard = String(code).replace(/\D/g, '').slice(0, 3) || '000';
+    return fetchJson(`rcp_be/${shard}/${code}.json`);
+  }
+
+  /* Alternative européenne : RCP de l'EMA, rangé par nom de marque. Les
+     médicaments autorisés par l'EMA portent le même nom dans toute l'Europe,
+     ce qui permet de retrouver le Xarelto français sans RCP à l'ANSM. */
+  async function fetchRcpEu(nom) {
+    const mots = normalizeQuery(nom || '').split(/\s+/).filter(Boolean);
+    if (!mots.length || mots[0].length < 3) return null;
+    // Deux clés : « marque » et « molécule_laboratoire ». Les génériques
+    // autorisés par l'EMA portent le nom de la molécule (Aripiprazole Accord,
+    // Aripiprazole Mylan…) : le premier mot seul ne distingue pas les
+    // laboratoires. L'export ne publie une clé que si elle désigne un seul
+    // document ; on préfère la plus précise.
+    const k1 = mots[0], k2 = mots.slice(0, 2).join('_');
+    const [r2, r1] = await Promise.all([
+      mots.length > 1 ? fetchJson(`rcp_eu/${k1.slice(0, 2)}/${k2}.json`) : null,
+      fetchJson(`rcp_eu/${k1.slice(0, 2)}/${k1}.json`)
+    ]);
+    return r2 || r1;
+  }
+
   async function fetchRcpFr(cis) {
     if (!cis) return null;
     try {
-      const r = await fetch(`rcp/${cis.slice(0, 3)}/${cis}.json`);
+      const r = await fetch(`rcp_fr/${cis.slice(0, 3)}/${cis}.json`);
       if (!r.ok) return null;
       const data = await r.json();
       return data?.s || null;
@@ -2797,6 +2868,9 @@
         anchor._fromAC   = true;
         anchor._acLabel  = acItem.name;
         anchor._acSource = acItem.source;
+        // Un produit choisi dans les suggestions fixe le pays : un Dafalgan
+        // pris dans la liste belge prend le RCP belge.
+        if (acItem.source === 'BE' || acItem.source === 'FR') anchor.pays = acItem.source;
       }
 
       if (!anchor.foundIn.length && !anchor._raw.rxcui) {
@@ -2819,7 +2893,7 @@
 
   /* ── renderResultsV2 ───────────────────────────────────────── */
   function renderResultsV2(anchor, enriched, profile) {
-    const { fdaLabel, ddi, food, equivalents, rcpFr } = enriched;
+    const { fdaLabel, ddi, food, equivalents, rcpFr, rcpBe, rcpEu } = enriched;
     const { frData, beData }      = anchor._raw;
     const fda = f => fdaLabel?.[f]?.[0] || null;
 
@@ -2937,14 +3011,35 @@
        médicament : même molécule, mais en français et avec les posologies
        autorisées ici. OpenFDA reste le repli, notamment pour les médicaments
        belges et ceux sans RCP exploitable côté ANSM. */
+    /* Ordre de priorité des RCP :
+       1. le RCP du pays du médicament — AFMPS pour la Belgique, ANSM pour la France ;
+       2. à défaut, l'alternative européenne — EMA ;
+       3. à défaut, OpenFDA.
+       Le RCP d'un pays ne sert pas pour un médicament de l'autre pays. */
     const cisFr = anchor._raw?.frData?.cis || null;
+    const srcFr = rcpFr ? { prov: 'fr', s: rcpFr, link: { cis: cisFr }, covers: [] } : null;
+    // Pour un médicament belge autorisé par l'EMA, l'AFMPS renvoie au document
+    // de l'EMA : on l'affiche comme tel, pour ne pas attribuer à l'AFMPS un
+    // texte qu'elle ne publie pas.
+    const beViaEma = /ema\.europa\.eu/.test(rcpBe?.u || '');
+    const srcBe = rcpBe?.s ? { prov: beViaEma ? 'eu' : 'be', s: rcpBe.s,
+      link: beViaEma ? { href: rcpBe.u, text: t('emaLink'),   flag: '🇪🇺' }
+                     : { href: rcpBe.u, text: t('afmpsLink'), flag: '🇧🇪' },
+      covers: rcpBe.p || [] } : null;
+    const srcEu = rcpEu?.s ? { prov: 'eu', s: rcpEu.s,
+      link: { href: rcpEu.u, text: t('emaLink'), flag: '🇪🇺' }, covers: rcpEu.p || [] } : null;
+    const chain = (anchor.pays === 'BE' ? [srcBe, srcEu]
+                : anchor.pays === 'FR' ? [srcFr, srcEu]
+                : [srcEu]).filter(Boolean);
     const pick  = (num, fdaText) => {
-      const sec = rcpFr?.[num];
-      // "b" = section structurée, avec ses tableaux. "x" = texte simple.
-      // L'export ne produit jamais les deux pour une même section.
-      if (sec?.b?.length) return { text: null, blocks: sec.b, prov: 'fr', tx: false };
-      if (sec?.x)         return { text: sec.x, blocks: null, prov: 'fr', tx: false };
-      return { text: fdaText, blocks: null, prov: 'us', tx };
+      for (const src of chain) {
+        const sec = src.s?.[num];
+        // "b" = section structurée, avec ses tableaux. "x" = texte simple.
+        // L'export ne produit jamais les deux pour une même section.
+        if (sec?.b?.length) return { text: null, blocks: sec.b, prov: src.prov, tx: false, src };
+        if (sec?.x)         return { text: sec.x, blocks: null, prov: src.prov, tx: false, src };
+      }
+      return { text: fdaText, blocks: null, prov: 'us', tx, src: null };
     };
     const sIndic  = pick('4.1', fda('indications_and_usage') || fda('purpose'));
     const sDosage = pick('4.2', fda('dosage_and_administration'));
@@ -2952,12 +3047,21 @@
     const sContra = pick('4.3', fda('contraindications'));
 
     const hasBody = s => !!(s.text || s.blocks?.length);
+    const linkOf  = x => x.src?.link || null;
     const clinSections = [
-      buildSection('💊', t('secIndication'),        sIndic.text,  sIndic.prov,  '',        sIndic.tx,  cisFr, sIndic.blocks),
-      buildSection('📋', t('secDosage'),             sDosage.text, sDosage.prov, '',        sDosage.tx, cisFr, sDosage.blocks),
-      buildSection('⚠️', t('secSideEffects'),        sSide.text,   sSide.prov,   hasBody(sSide) ? 'warning' : '', sSide.tx, cisFr, sSide.blocks),
-      buildSection('🚫', t('secContraindications'), sContra.text, sContra.prov, '',        sContra.tx, cisFr, sContra.blocks),
+      buildSection('💊', t('secIndication'),        sIndic.text,  sIndic.prov,  '',        sIndic.tx,  linkOf(sIndic),  sIndic.blocks),
+      buildSection('📋', t('secDosage'),             sDosage.text, sDosage.prov, '',        sDosage.tx, linkOf(sDosage), sDosage.blocks),
+      buildSection('⚠️', t('secSideEffects'),        sSide.text,   sSide.prov,   hasBody(sSide) ? 'warning' : '', sSide.tx, linkOf(sSide), sSide.blocks),
+      buildSection('🚫', t('secContraindications'), sContra.text, sContra.prov, '',        sContra.tx, linkOf(sContra), sContra.blocks),
     ];
+
+    /* Un RCP belge ou européen vaut souvent pour toute une gamme de produits.
+       On l'indique, plutôt que de découper la rubrique : un découpage raté
+       masquerait une posologie. */
+    const docSrc = [sIndic, sDosage, sSide, sContra].map(x => x.src).find(x => x && x.covers.length > 1);
+    if (docSrc) {
+      clinSections.unshift(`<div class="covers-note">📄 ${t('coversNote')} ${docSrc.covers.map(esc).join(' · ')}</div>`);
+    }
 
     /* ── Zone A: safety sections ── */
     const allergyIngSuffix = allergyHitIngredient
@@ -3145,22 +3249,38 @@
   /* ── Helper: build a flat section row ─────────────────────── */
   function buildSection(icon, title, content, provClass, stateCls = '', translated = false, ansmCis = null, blocks = null) {
     const empty   = !content && !(blocks && blocks.length);
-    // Le RCP français est bien plus long que le texte OpenFDA tronqué : on lui
-    // laisse plus de place, le lien ANSM donnant accès au texte intégral.
-    const maxLen  = provClass === 'fr' ? 1200 : 500;
+    // Un RCP européen (ANSM, AFMPS, EMA) est bien plus long que le texte OpenFDA
+    // tronqué : on lui laisse plus de place, le lien officiel donnant accès au
+    // texte intégral.
+    const maxLen  = provClass === 'us' ? 500 : 1200;
     const useBlocks = !!(blocks && blocks.length);
-    const inner   = useBlocks ? renderBlocks(blocks) : paragraphize(trunc(content, maxLen));
-    const long    = useBlocks ? blocksLength(blocks) > maxLen : false;
+    // Un RCP (ANSM, AFMPS, EMA) est rendu en entier, puis limité en hauteur avec
+    // « Voir plus » : couper au caractère masquait la fin de la posologie
+    // (Forzaten : 3 907 caractères, coupés à 1 200). Seul le texte OpenFDA,
+    // tronqué pour la traduction, garde la coupe.
+    const isRcp   = provClass !== 'us';
+    const inner   = useBlocks ? renderBlocks(blocks)
+                  : isRcp     ? paragraphize(content)
+                  : paragraphize(trunc(content, maxLen));
+    const long    = useBlocks ? blocksLength(blocks) > maxLen
+                  : isRcp && String(content || '').length > maxLen;
     const bodyHtml = empty
       ? `<span class="section-empty">${t('noDataFDA')}</span>`
       : `<div class="section-content${long ? ' clamped' : ''}">${inner}</div>`
         + (long ? `<button class="see-more" onclick="toggleSectionMore(this)">${t('seeMore')}</button>` : '');
-    const ansmHtml = ansmCis
+    // Lien vers la source officielle : fiche ANSM (par code CIS), ou PDF de
+    // l'AFMPS ou de l'EMA (par adresse). Une chaîne seule est un code CIS.
+    const link = typeof ansmCis === 'string' ? { cis: ansmCis } : ansmCis;
+    const ansmHtml = link?.cis
       ? `<a class="ansm-link" target="_blank" rel="noopener"
-             href="https://base-donnees-publique.medicaments.gouv.fr/medicament/${encodeURIComponent(ansmCis)}/extrait"
+             href="https://base-donnees-publique.medicaments.gouv.fr/medicament/${encodeURIComponent(link.cis)}/extrait"
           >🇫🇷 ${t('ansmLink')}</a>`
-      : '';
-    const provLabel = provClass === 'us' ? 'OpenFDA' : provClass === 'fr' ? 'BDPM' : 'SAM';
+      : link?.href
+        ? `<a class="ansm-link" target="_blank" rel="noopener" href="${esc(link.href)}"
+          >${link.flag || ''} ${esc(link.text || '')}</a>`
+        : '';
+    const provLabel = provClass === 'us' ? 'OpenFDA' : provClass === 'fr' ? 'BDPM'
+                    : provClass === 'eu' ? 'EMA' : 'AFMPS';
     const txBadge   = translated
       ? `<span class="prov" style="background:var(--blue-lt);color:var(--blue-mid);margin-left:4px;" title="${t('translateNote')}">🌐 FR</span>`
       : '';

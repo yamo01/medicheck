@@ -3,9 +3,15 @@
    pour un usage hors-ligne.
 
    Deux stratégies, et non plus une seule :
-   - le code de l'app (HTML, manifeste) passe par le réseau d'abord ;
-   - les fichiers lourds et figés (bases, WebAssembly, logos, fiches RCP)
-     passent par le cache d'abord.
+   - le code de l'app (HTML, manifeste) et les fiches RCP passent par le
+     réseau d'abord ;
+   - les fichiers lourds et figés (bases, WebAssembly, logos) passent par le
+     cache d'abord.
+
+   Les fiches RCP (rcp_fr/, rcp_be/, rcp_eu/) sont petites (~10 Ko) et leur
+   contenu change quand on réextrait les RCP. En « cache d'abord », une
+   personne qui avait consulté un médicament gardait l'ancienne fiche
+   indéfiniment — par exemple sans les tableaux de posologie ajoutés ensuite.
 
    La stratégie « cache d'abord » appliquée à tout servait l'ancienne page
    après chaque mise en ligne. L'utilisateur restait une visite en retard :
@@ -28,10 +34,14 @@ const PRECACHE_URLS = [
   'src/logo-name.svg'
 ];
 
-/* Le code de l'app : ces adresses doivent toujours venir du serveur. */
+/* Ces adresses doivent venir du serveur quand il est joignable : le code de
+   l'app, et les fiches RCP. Le cache ne sert qu'en cas de coupure. */
 function isAppCode(url) {
   const path = url.pathname;
   return path.endsWith('/') || path.endsWith('.html') || path.endsWith('manifest.json');
+}
+function isRcpSheet(url) {
+  return /\/rcp_(fr|be|eu)\/.+\.json$/.test(url.pathname);
 }
 
 /* Range une réponse valide dans le cache, sans bloquer la réponse rendue. */
@@ -61,7 +71,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
 
-  if (isAppCode(url)) {
+  if (isAppCode(url) || isRcpSheet(url)) {
     // Réseau d'abord. Le cache ne sert qu'en cas de coupure.
     event.respondWith(
       fetch(event.request)
